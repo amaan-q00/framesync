@@ -3,32 +3,21 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
 import path from 'path';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
-import { s3, BUCKET_NAME } from '../config/storage';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { s3, BUCKET_NAME } from '../config/storage'; // Using Internal s3 client
 import { redis } from '../config/redis';
 import pool from '../config/db';
+import { promisify } from 'util';
 
-// Ensure temp directory exists
-const TMP_DIR = path.resolve('temp');
-if (!fs.existsSync(TMP_DIR)) {
-  fs.mkdirSync(TMP_DIR);
+const readdir = promisify(fs.readdir);
+const unlink = promisify(fs.unlink);
+const stat = promisify(fs.stat);
+
+const TMP_BASE = path.resolve('temp');
+if (!fs.existsSync(TMP_BASE)) {
+  fs.mkdirSync(TMP_BASE);
 }
 
-// Helper: Download from S3 to Local Disk
-const downloadFile = async (bucketKey: string, localPath: string) => {
-  const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: bucketKey });
-  const response = await s3.send(command);
-  
-  // Stream data to file
-  const stream = response.Body as Readable;
-  const file = fs.createWriteStream(localPath);
-  
-  return new Promise((resolve, reject) => {
-    stream.pipe(file).on('finish', resolve).on('error', reject);
-  });
-};
-
-// Helper: Upload Local File to S3
 const uploadFile = async (localPath: string, bucketKey: string, contentType: string) => {
   const fileContent = fs.readFileSync(localPath);
   await s3.send(new PutObjectCommand({
@@ -41,91 +30,136 @@ const uploadFile = async (localPath: string, bucketKey: string, contentType: str
 
 const processVideo = async (job: Job) => {
   const { videoId, bucketPath } = job.data;
-  console.log(`Processing Video ${videoId}...`);
+  console.log(`Starting HLS conversion for ${videoId}...`);
 
-  const inputPath = path.join(TMP_DIR, `input-${videoId}.mp4`);
-  const outputPath = path.join(TMP_DIR, `output-${videoId}.mp4`);
-  const thumbPath = path.join(TMP_DIR, `thumb-${videoId}.jpg`);
+  const videoDir = path.join(TMP_BASE, `hls-${videoId}`);
+  if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir);
+
+  const outputUrl = path.join(videoDir, 'index.m3u8');
+  const uploadedSegments = new Set<string>();
 
   try {
-    // Download Raw Video
-    await downloadFile(bucketPath, inputPath);
+    // 1. Get Input Stream URL (Internal Docker Network)
+    const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: bucketPath });
+    const inputUrl = await getSignedUrl(s3, command, { expiresIn: 7200 });
 
-    // Generate Thumbnail (Screenshot at 1 sec)
-    await new Promise((resolve, reject) => {
-      ffmpeg(inputPath)
-        .screenshots({
-          count: 1,
-          folder: TMP_DIR,
-          filename: `thumb-${videoId}.jpg`,
-          timestamps: ['1'], // Take shot at 1st second
-          size: '320x180'
-        })
-        .on('end', resolve)
-        .on('error', reject);
-    });
+    console.log(`Stream URL generated`);
 
-    // Transcode Video (720p, H.264, Optimized for Web)
+    // 2. Start the "Hot Upload" Poller
+    const uploaderInterval = setInterval(async () => {
+      try {
+        const files = await readdir(videoDir);
+        const tsFiles = files.filter(f => f.endsWith('.ts'));
+
+        // Sort files by modification time
+        const statsPromises = tsFiles.map(async file => {
+          const stats = await stat(path.join(videoDir, file));
+          return { file, mtime: stats.mtime.getTime() };
+        });
+        
+        const fileStats = await Promise.all(statsPromises);
+        fileStats.sort((a, b) => a.mtime - b.mtime); // Oldest first
+
+        // Skip the newest file as FFmpeg might still be writing to it
+        const safeFiles = fileStats.slice(0, -1);
+
+        for (const { file } of safeFiles) {
+          if (uploadedSegments.has(file)) continue;
+
+          console.log(`Uploading segment: ${file}`);
+          const filePath = path.join(videoDir, file);
+          const s3Key = `videos/${videoId}/${file}`;
+
+          await uploadFile(filePath, s3Key, 'video/MP2T');
+          uploadedSegments.add(file);
+          
+          await unlink(filePath); 
+        }
+      } catch (err) {
+        console.error('Uploader error (non-fatal):', err);
+      }
+    }, 5000); 
+
+    // 3. Run FFmpeg with Performance Optimizations
     await new Promise((resolve, reject) => {
-      ffmpeg(inputPath)
-        .output(outputPath)
+      ffmpeg(inputUrl)
+        .output(outputUrl)
         .videoCodec('libx264')
-        .size('1280x720') // Downscale to 720p
         .audioCodec('aac')
+        .size('1280x720')        // Downscale to 720p for speed
         .outputOptions([
-          '-movflags +faststart', // Critical for web streaming!
-          '-preset fast',         // Balance speed/quality
-          '-crf 23'               // Standard quality
+          '-preset ultrafast',   // Fastest encoding preset
+          '-threads 0',          // Use all available CPU cores
+          '-hls_time 10',        // 10-second segments
+          '-hls_list_size 0',    // Include all segments in playlist
+          '-f hls'               // HLS format
         ])
-        .on('end', resolve)
-        .on('error', reject)
+        .on('start', (cmd) => {
+          console.log('FFmpeg process started');
+          console.log('Command:', cmd);
+        })
+        .on('progress', (progress) => {
+          if (progress.percent) {
+             console.log(`Processing: ${Math.floor(progress.percent)}% done`);
+          } else {
+             console.log(`Processing: ${progress.timemark}`);
+          }
+        })
+        .on('end', () => {
+          clearInterval(uploaderInterval);
+          console.log('FFmpeg process finished');
+          resolve(true);
+        })
+        .on('error', (err) => {
+          clearInterval(uploaderInterval);
+          console.error('FFmpeg Error:', err.message);
+          reject(err);
+        })
         .run();
     });
 
-    // Upload Processed Files
-    const processedKey = `processed/${videoId}.mp4`;
-    const thumbKey = `thumbnails/${videoId}.jpg`;
+    // 4. Final Cleanup
+    console.log('Performing final cleanup and manifest upload...');
+    const finalFiles = await readdir(videoDir);
+    for (const file of finalFiles) {
+      const filePath = path.join(videoDir, file);
+      const s3Key = `videos/${videoId}/${file}`;
+      const contentType = file.endsWith('.m3u8') ? 'application/x-mpegURL' : 'video/MP2T';
 
-    await uploadFile(outputPath, processedKey, 'video/mp4');
-    await uploadFile(thumbPath, thumbKey, 'image/jpeg');
+      console.log(`Final Upload: ${file}`);
+      await uploadFile(filePath, s3Key, contentType);
+      
+      if (fs.existsSync(filePath)) await unlink(filePath);
+    }
 
-    // Update Database
+    // 5. Update Database
+    const manifestPath = `videos/${videoId}/index.m3u8`;
     await pool.query(
-      `UPDATE videos 
-       SET status = 'ready', bucket_path = $1, thumbnail_path = $2 
-       WHERE id = $3`,
-      [processedKey, thumbKey, videoId]
+      `UPDATE videos SET status = 'ready', bucket_path = $1 WHERE id = $2`,
+      [manifestPath, videoId]
     );
 
-    console.log(`Video ${videoId} processing complete!`);
+    console.log(`HLS Processing Complete for ${videoId}`);
 
   } catch (error) {
-    console.error(`Processing failed for ${videoId}:`, error);
-    // Mark as failed in DB
+    console.error(`HLS Failed for ${videoId}:`, error);
     await pool.query("UPDATE videos SET status = 'failed' WHERE id = $1", [videoId]);
-    throw error; // Let BullMQ handle retry logic
+    throw error;
   } finally {
-    //Cleanup Temp Files
-    [inputPath, outputPath, thumbPath].forEach(file => {
-      if (fs.existsSync(file)) fs.unlinkSync(file);
-    });
+    if (fs.existsSync(videoDir)) {
+      fs.rmSync(videoDir, { recursive: true, force: true });
+    }
   }
 };
 
-// Initialize the Worker
 export const initWorker = () => {
   const worker = new Worker('video-transcoding', processVideo, {
     connection: {
       host: redis.options.host,
       port: redis.options.port,
     },
-    concurrency: 1, // Process 1 job at once
-    lockDuration: 120000, // 2 minutes process lock 
+    concurrency: 1, 
+    lockDuration: 120000, 
   });
-
-  worker.on('failed', (job, err) => {
-    console.error(`Job ${job?.id} failed:`, err);
-  });
-  
-  console.log('Video Worker initialized and listening...');
+  console.log('HLS Worker initialized');
 };
