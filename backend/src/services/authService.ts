@@ -42,7 +42,16 @@ export class AuthService {
     const result = await pool.query<User>('SELECT * FROM users WHERE email = $1', [input.email]);
     const user = result.rows[0];
 
-    if (!user || !(await bcrypt.compare(input.password, user.password_hash))) {
+    // FIX LOGIC:
+    // 1. Check if user exists (!user)
+    // 2. Check if user has a password (!user.password_hash) <-- Handles Google-only users
+    // 3. Compare password
+    
+    // We assign strict boolean to avoid TS screaming
+    const hasPassword = user && user.password_hash;
+    const isValid = hasPassword && (await bcrypt.compare(input.password, user.password_hash!)); // Force unwrap ! because we checked hasPassword
+
+    if (!user || !hasPassword || !isValid) {
       throw new AppError('Invalid email or password', 401);
     }
 
@@ -52,6 +61,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
+      avatar_url: user.avatar_url, // Include avatar now
       created_at: user.created_at
     };
 

@@ -5,12 +5,214 @@ import {
   CompleteMultipartUploadCommand 
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { randomBytes } from 'crypto';
 import pool from '../config/db';
+import { redis } from '../config/redis';
 import { s3, s3Signer, BUCKET_NAME } from '../config/storage';
 import { addVideoJob } from '../services/queueService';
 import { AppError } from '../utils/appError';
 import { AuthRequest } from '../middleware/auth';
+import { env } from '../config/env';
 
+// --- HELPER: ACCESS CONTROL ---
+const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: string) => {
+  // 1. Fetch Video + Owner
+  const videoResult = await pool.query(
+    `SELECT v.*, u.email as owner_email 
+     FROM videos v 
+     JOIN users u ON v.user_id = u.id 
+     WHERE v.id = $1`, 
+    [videoId]
+  );
+  
+  if (videoResult.rowCount === 0) return { access: false, role: null, video: null };
+  const video = videoResult.rows[0];
+
+  // 2. Case A: Owner (Full Access)
+  if (userId && video.user_id === userId) {
+    return { access: true, role: 'owner', video };
+  }
+
+  // 3. Case B: Team Member (Editor/Viewer)
+  if (userId) {
+    const shareResult = await pool.query(
+      'SELECT role FROM video_shares WHERE video_id = $1 AND user_id = $2',
+      [videoId, userId]
+    );
+    if (shareResult.rowCount && shareResult.rowCount > 0) {
+      return { access: true, role: shareResult.rows[0].role, video };
+    }
+  }
+
+  // 4. Case C: Public Guest (Editor/Viewer via Token)
+  if (video.is_public && video.public_token === publicToken) {
+    // Return the specific role set in the DB (default is 'viewer')
+    return { access: true, role: video.public_role, video };
+  }
+
+  return { access: false, role: null, video: null };
+};
+
+// --- READ ROUTES ---
+
+// GET /api/videos/my-works
+export const getMyWorks = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, thumbnail_path, status, views, created_at, is_public, public_token, public_role 
+       FROM videos WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.user?.userId]
+    );
+    res.status(200).json({ status: 'success', data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/videos/shared-with-me
+export const getSharedWithMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(
+      `SELECT v.id, v.title, v.thumbnail_path, v.status, v.views, v.created_at, u.name as owner_name, vs.role
+       FROM video_shares vs
+       JOIN videos v ON vs.video_id = v.id
+       JOIN users u ON v.user_id = u.id
+       WHERE vs.user_id = $1
+       ORDER BY vs.created_at DESC`,
+      [req.user?.userId]
+    );
+    res.status(200).json({ status: 'success', data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/videos/:id (Watch Page)
+export const getVideo = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const { id } = req.params as { id: string };
+  const { token } = req.query as { token?: string }; 
+
+  try {
+    const { access, role, video } = await checkVideoAccess(id, req.user?.userId, token);
+
+    if (!access || !video) {
+      return next(new AppError('Access Denied or Video Not Found', 403));
+    }
+
+    // Increment View Count (Optimized with Redis)
+    redis.incr(`video:views:${id}`).catch(err => 
+      console.error(`Redis View Incr Failed for ${id}`, err)
+  );
+
+    const storageHost = env.NODE_ENV === 'development' 
+      ? 'http://127.0.0.1:9000' 
+      : env.S3_ENDPOINT;
+      
+    const manifestUrl = `${storageHost}/${BUCKET_NAME}/${video.bucket_path}`;
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        ...video,
+        role, // 'owner', 'editor', 'viewer'
+        manifestUrl
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --- SHARING ROUTES ---
+
+// POST /api/videos/:id/share (Invite Team)
+export const shareVideo = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const { id } = req.params as { id: string };
+  const { email, role } = req.body; 
+
+  try {
+    const videoCheck = await pool.query('SELECT user_id FROM videos WHERE id = $1', [id]);
+    if (videoCheck.rowCount === 0 || videoCheck.rows[0].user_id !== req.user?.userId) {
+      return next(new AppError('Only the owner can share this video', 403));
+    }
+
+    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (userResult.rowCount === 0) {
+      return next(new AppError('User not found', 404));
+    }
+    const targetUserId = userResult.rows[0].id;
+
+    if (targetUserId === req.user?.userId) {
+      return next(new AppError('You cannot share with yourself', 400));
+    }
+
+    await pool.query(
+      `INSERT INTO video_shares (video_id, user_id, role) 
+       VALUES ($1, $2, $3)
+       ON CONFLICT (video_id, user_id) DO UPDATE SET role = $3`,
+      [id, targetUserId, role || 'viewer']
+    );
+
+    res.status(200).json({ status: 'success', message: 'User added to video' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /api/videos/:id/share (Remove Team)
+export const removeShare = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const { id } = req.params as { id: string };
+  const { userId } = req.body; 
+
+  try {
+     const videoCheck = await pool.query('SELECT user_id FROM videos WHERE id = $1', [id]);
+     if (videoCheck.rowCount === 0 || videoCheck.rows[0].user_id !== req.user?.userId) {
+       return next(new AppError('Permission Denied', 403));
+     }
+
+     await pool.query('DELETE FROM video_shares WHERE video_id = $1 AND user_id = $2', [id, userId]);
+     res.status(200).json({ status: 'success', message: 'User removed' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/videos/:id/public (Toggle Public Link)
+export const updatePublicAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const { id } = req.params as { id: string };
+  const { enabled, role } = req.body; // 'viewer' or 'editor'
+
+  try {
+    const videoCheck = await pool.query('SELECT user_id FROM videos WHERE id = $1', [id]);
+    if (videoCheck.rowCount === 0 || videoCheck.rows[0].user_id !== req.user?.userId) {
+      return next(new AppError('Permission Denied', 403));
+    }
+
+    let token = null;
+
+    if (enabled) {
+      // ALWAYS generate a fresh token when enabling.
+      // This invalidates any previous links associated with this video.
+      token = randomBytes(16).toString('hex');
+    } 
+    // If enabled is false, token remains null (effectively destroying the link)
+
+    await pool.query(
+      'UPDATE videos SET is_public = $1, public_token = $2, public_role = $3 WHERE id = $4',
+      [enabled, token, role || 'viewer', id]
+    );
+
+    res.status(200).json({ 
+      status: 'success', 
+      data: { is_public: enabled, public_token: token, public_role: role || 'viewer' } 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --- UPLOAD LOGIC ---
 export const initializeMultipart = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { fileName, fileType, title, description } = req.body;
   const userId = req.user?.userId;
@@ -33,7 +235,6 @@ export const initializeMultipart = async (req: AuthRequest, res: Response, next:
       ContentType: fileType,
     });
     
-    // Use internal s3 client to initiate the session
     const multipart = await s3.send(command);
 
     res.status(200).json({
@@ -60,7 +261,6 @@ export const signPart = async (req: AuthRequest, res: Response, next: NextFuncti
       PartNumber: partNumber,
     });
 
-    // Use s3Signer to generate a URL valid for the frontend (handling localhost/prod differences)
     const signedUrl = await getSignedUrl(s3Signer, command, { expiresIn: 3600 });
 
     res.status(200).json({

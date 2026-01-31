@@ -9,6 +9,7 @@ import authRoutes from './routes/authRoutes';
 import videoRoutes from './routes/videoRoutes';
 import { globalErrorHandler } from './middleware/errorHandler';
 import { initWorker } from './services/worker';
+import { initCronJobs } from './services/cronService';
 
 const app = express();
 
@@ -68,7 +69,10 @@ const init = async () => {
     // 4. Worker
     initWorker();
 
-    // 5. Server
+    // 5. Cron
+    initCronJobs();
+
+    // 6. Server
     app.listen(env.PORT, () => {
       console.log(`Server running on port ${env.PORT}`);
     });
