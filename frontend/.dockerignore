@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.log
+.DS_Store
+.vscode
+.idea
+
+# Allow package lock files
+!package-lock.json
+!pnpm-lock.yaml

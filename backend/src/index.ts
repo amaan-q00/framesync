@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import pool from './config/db';
 import { s3, BUCKET_NAME } from './config/storage';
@@ -7,6 +8,7 @@ import { CreateBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
 import createTables from './models/schema';
 import authRoutes from './routes/authRoutes';
 import videoRoutes from './routes/videoRoutes';
+import profileRoutes from './routes/profileRoutes';
 import { globalErrorHandler } from './middleware/errorHandler';
 import { initWorker } from './services/worker';
 import { initCronJobs } from './services/cronService';
@@ -14,15 +16,19 @@ import { initCronJobs } from './services/cronService';
 const app = express();
 
 app.use(cors({
-  origin: '*', 
+  origin: env.FRONTEND_URL,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+app.use(cookieParser());
 
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/videos', videoRoutes);
+app.use('/api/profile', profileRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', env: env.NODE_ENV });

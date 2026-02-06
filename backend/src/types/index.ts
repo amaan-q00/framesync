@@ -23,6 +23,18 @@ export interface TokenPayload {
   email: string;
 }
 
+export interface CookieOptions {
+  maxAge: number;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'strict' | 'lax' | 'none';
+}
+
+export interface ProfileUpdateInput {
+  name?: string;
+  avatar_url?: string;
+}
+
 // --- 2. VIDEO ASSET (Matches DB) ---
 export interface Video {
   id: string;

@@ -2,10 +2,13 @@
   "watch": ["src"],
   "ext": "ts,json",
   "exec": "ts-node src/index.ts",
+  "legacyWatch": true,
+  "pollingInterval": 1000,
   "ignore": [
     "temp/*",
     "node_modules",
     "*.test.ts",
-    "*.log"
+    "*.log",
+    "dist/*"
   ]
 }

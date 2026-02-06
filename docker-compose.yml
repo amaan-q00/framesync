@@ -36,9 +36,12 @@ services:
 
   # 4. BACKEND API (Node.js)
   api:
-    build: ./backend
+    profiles: ["dev"]
+    build:
+      context: ./backend
+      target: dev
     restart: always
-    command: npm run dev
+    command: pnpm dev
     ports:
       - "8000:8000"
     environment:
@@ -56,8 +59,75 @@ services:
       - redis
       - minio
     volumes:
-      - ./backend/src:/app/src # Hot Reloading!
-      - ./backend/uploads:/app/uploads
+      - ./backend:/app
+      - /app/node_modules
+      - /app/dist
+    working_dir: /app
+
+  api-prod:
+    profiles: ["prod"]
+    build:
+      context: ./backend
+      target: prod
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      NODE_ENV: production
+      PORT: 8000
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      - db
+      - redis
+      - minio
+
+  # 5. FRONTEND (Next.js)
+  frontend:
+    profiles: ["dev"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    restart: always
+    command: pnpm dev
+    # FIX 1: Polling Environment Variables
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # These force standard watchers to use polling
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      # Optional: Reduces CPU usage slightly
+      WDS_SOCKET_PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app          # Mount your code
+      - /app/node_modules        # Prevent host from overwriting container's modules
+      - /app/.next               # Keep build cache inside container
+    depends_on:
+      - api
+
+  frontend-prod:
+    profiles: ["prod"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - api-prod
 
 volumes:
   postgres_data:

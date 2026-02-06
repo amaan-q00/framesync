@@ -13,6 +13,7 @@
     "@aws-sdk/s3-request-presigner": "^3.978.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.67.2",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "envalid": "^8.1.1",
@@ -23,7 +24,7 @@
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
-    "multer": "^2.0.2",
+    "multer": "^1.4.5-lts.1",
     "node-cron": "^4.2.1",
     "pg": "^8.17.2",
     "socket.io": "^4.8.3",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/fluent-ffmpeg": "^2.1.28",
@@ -44,5 +46,6 @@
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
-  }
+  },
+  "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264"
 }

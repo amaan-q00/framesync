@@ -7,16 +7,37 @@ import { env } from '../config/env';
 import { AuthService } from '../services/authService';
 import { RegisterSchema, LoginSchema } from '../schemas/auth.schema';
 import { AppError } from '../utils/appError';
-import { User, SafeUser } from '../types';
+import { User, SafeUser, CookieOptions } from '../types';
+import { AuthRequest } from '../middleware/auth';
 
 // Initialize Google Client
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
+
+// Helper function to set auth cookie
+const setAuthCookie = (res: Response, token: string) => {
+  const cookieOptions: CookieOptions = {
+    maxAge: parseInt(env.COOKIE_MAX_AGE),
+    httpOnly: env.COOKIE_HTTPONLY === 'true',
+    secure: env.COOKIE_SECURE === 'true',
+    sameSite: env.COOKIE_SAMESITE as 'strict' | 'lax' | 'none',
+  };
+
+  res.cookie('auth_token', token, cookieOptions);
+};
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedData = RegisterSchema.parse(req.body);
     const result = await AuthService.register(validatedData);
-    res.status(201).json({ status: 'success', data: result });
+    
+    // Set auth cookie
+    setAuthCookie(res, result.token);
+    
+    // Return user data without token
+    res.status(201).json({ 
+      status: 'success', 
+      data: { user: result.user }
+    });
   } catch (error) {
     next(error);
   }
@@ -26,7 +47,15 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   try {
     const validatedData = LoginSchema.parse(req.body);
     const result = await AuthService.login(validatedData);
-    res.status(200).json({ status: 'success', data: result });
+    
+    // Set auth cookie
+    setAuthCookie(res, result.token);
+    
+    // Return user data without token
+    res.status(200).json({ 
+      status: 'success', 
+      data: { user: result.user }
+    });
   } catch (error) {
     next(error);
   }
@@ -93,9 +122,12 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
       created_at: user.created_at
     };
 
+    // Set auth cookie
+    setAuthCookie(res, jwtToken);
+    
+    // Return user data without token
     res.status(200).json({
       status: 'success',
-      token: jwtToken,
       data: { user: safeUser }
     });
 
@@ -106,19 +138,22 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
 };
 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
-  }
+  const token = req.cookies?.auth_token;
 
   try {
+    // Clear the auth cookie
+    res.clearCookie('auth_token');
+
+    if (!token) {
+      return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
+    }
+
     // 1. Decode to get expiration time
     const decoded = jwt.decode(token) as any;
     
     // If token is already invalid/malformed, just return success
     if (!decoded || !decoded.exp) {
-       return res.status(200).json({ status: 'success' });
+       return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
     }
 
     // 2. Calculate remaining time in seconds
@@ -132,6 +167,28 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
     }
 
     res.status(200).json({ status: 'success', message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Session validation endpoint
+export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    // User is already attached to request by protect middleware
+    const userResult = await pool.query(
+      'SELECT id, email, name, avatar_url, created_at FROM users WHERE id = $1',
+      [req.user?.userId]
+    );
+
+    if (!userResult.rowCount) {
+      return next(new AppError('User not found', 404));
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: { user: userResult.rows[0] }
+    });
   } catch (error) {
     next(error);
   }

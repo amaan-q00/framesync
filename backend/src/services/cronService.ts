@@ -80,7 +80,7 @@ const cleanupExpiredVideos = async () => {
     }
 
   } catch (error) {
-    console.error('Cleanup Job Failed:', error);
+    console.error('Video Cleanup Job Failed:', error);
   }
 };
 

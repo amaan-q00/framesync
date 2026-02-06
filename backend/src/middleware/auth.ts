@@ -10,17 +10,13 @@ export interface AuthRequest extends Request {
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  let token;
-
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
+  const token = req.cookies?.auth_token;
 
   if (!token) {
     return next(new AppError('Not authorized to access this route', 401));
   }
 
-  // --- 1. CHECK BLACKLIST (New) ---
+  // --- 1. CHECK BLACKLIST ---
   const isBlacklisted = await redis.get(`blacklist:${token}`);
   if (isBlacklisted) {
     return next(new AppError('Session expired. Please login again.', 401));
@@ -39,10 +35,9 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
 // Middleware that attempts to identify the user but allows the request to proceed if no token is present.
 // This is used for public routes where we still want to know if the user is authenticated.
 export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
+  const token = req.cookies?.auth_token;
 
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
+  if (token) {
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
       req.user = decoded;

@@ -1,5 +1,5 @@
 # Use a lightweight Node image
-FROM node:18-bullseye-slim
+FROM node:18-bullseye-slim AS base
 
 # 1. Install System Dependencies (FFmpeg is mandatory)
 RUN apt-get update && apt-get install -y ffmpeg python3 make g++ \
@@ -8,19 +8,37 @@ RUN apt-get update && apt-get install -y ffmpeg python3 make g++ \
 # 2. Set Working Directory
 WORKDIR /app
 
-# 3. Install Dependencies (Cached Layer)
-COPY package*.json ./
-RUN npm install
+# 3. Enable corepack
+RUN corepack enable
 
-# 4. Copy Source Code
+# 4. Install Dependencies (Cached Layer)
+FROM base AS deps
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# 5. Dev Target (for hot reload)
+FROM deps AS dev
+
 COPY . .
-
-# 5. Build TypeScript (for production)
-# In dev, we override this with 'npm run dev'
-RUN npm run build
-
-# 6. Expose Port
 EXPOSE 8000
+CMD ["pnpm", "dev"]
 
-# 7. Start Command
-CMD ["npm", "start"]
+# 6. Build Target (for production)
+FROM deps AS build
+
+COPY . .
+RUN pnpm build
+
+# 7. Prod Target (shipping only dist + prod deps)
+FROM base AS prod
+
+ENV NODE_ENV=production
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
+COPY --from=build /app/dist ./dist
+
+EXPOSE 8000
+CMD ["node", "dist/index.js"]
