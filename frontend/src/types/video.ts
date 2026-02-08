@@ -3,25 +3,50 @@ export interface Video {
   user_id: number;
   title: string;
   description?: string;
-  
+
   // Storage
   bucket_path: string;
   thumbnail_path?: string;
-  
+  thumbnail_url?: string | null;
+
   // Metadata
-  fps: number;       // Default 24.0
-  duration: number;  // Total seconds
-  
+  fps: number;
+  duration: number;
+
   // State
   status: 'uploading' | 'queued' | 'processing' | 'ready' | 'failed';
   views: number;
-  
+
   // Access Control
   is_public: boolean;
   public_token?: string;
   public_role: 'viewer' | 'editor';
-  
+
   created_at: Date;
+}
+
+/** List item for "My Works" – may include thumbnail_url from API */
+export type MyWorkVideo = Pick<
+  Video,
+  'id' | 'title' | 'thumbnail_path' | 'thumbnail_url' | 'status' | 'views' | 'created_at' | 'is_public' | 'public_token' | 'public_role'
+>;
+
+/** List item for "Shared with me" – includes owner and your role */
+export interface SharedWithMeVideo extends MyWorkVideo {
+  owner_name: string;
+  role: 'viewer' | 'editor';
+}
+
+export interface PaginatedVideos<T> {
+  data: T[];
+  total: number;
+}
+
+export interface VideoShareEntry {
+  user_id: number;
+  email: string;
+  name: string | null;
+  role: 'viewer' | 'editor';
 }
 
 export interface UploadSession {

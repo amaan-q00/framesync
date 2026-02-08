@@ -1,10 +1,13 @@
 import { LoginCredentials, RegisterCredentials, AuthResponse, GoogleAuthResponse, User } from '@/types/auth';
-import { 
-  InitializeUploadResponse, 
-  SignPartResponse, 
-  CompleteUploadResponse, 
+import {
+  InitializeUploadResponse,
+  SignPartResponse,
+  CompleteUploadResponse,
   PublicAccessResponse,
-  Video 
+  Video,
+  MyWorkVideo,
+  SharedWithMeVideo,
+  VideoShareEntry,
 } from '@/types/video';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -171,16 +174,32 @@ export const videoApi = {
     });
   },
 
-  getMyWorks: async (): Promise<{ status: string; data: Video[] }> => {
-    return apiRequest('/videos/my-works', {
-      method: 'GET',
-    });
+  getMyWorks: async (params?: { limit?: number; offset?: number }): Promise<{ status: string; data: MyWorkVideo[]; total: number }> => {
+    const sp = new URLSearchParams();
+    if (params?.limit != null) sp.set('limit', String(params.limit));
+    if (params?.offset != null) sp.set('offset', String(params.offset));
+    const q = sp.toString();
+    return apiRequest(`/videos/my-works${q ? `?${q}` : ''}`, { method: 'GET' });
   },
 
-  getSharedWithMe: async (): Promise<{ status: string; data: Video[] }> => {
-    return apiRequest('/videos/shared-with-me', {
-      method: 'GET',
-    });
+  getSharedWithMe: async (params?: { limit?: number; offset?: number }): Promise<{ status: string; data: SharedWithMeVideo[]; total: number }> => {
+    const sp = new URLSearchParams();
+    if (params?.limit != null) sp.set('limit', String(params.limit));
+    if (params?.offset != null) sp.set('offset', String(params.offset));
+    const q = sp.toString();
+    return apiRequest(`/videos/shared-with-me${q ? `?${q}` : ''}`, { method: 'GET' });
+  },
+
+  getVideoShares: async (videoId: string): Promise<{ status: string; data: VideoShareEntry[] }> => {
+    return apiRequest(`/videos/${videoId}/shares`, { method: 'GET' });
+  },
+
+  deleteVideo: async (videoId: string): Promise<{ status: string; message: string }> => {
+    return apiRequest(`/videos/${videoId}`, { method: 'DELETE' });
+  },
+
+  removeMyAccess: async (videoId: string): Promise<{ status: string; message: string }> => {
+    return apiRequest(`/videos/${videoId}/share/me`, { method: 'DELETE' });
   },
 
   getVideo: async (videoId: string, token?: string): Promise<{ status: string; data: Video & { role: string; manifestUrl: string } }> => {

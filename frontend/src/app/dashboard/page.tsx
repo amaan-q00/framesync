@@ -1,91 +1,173 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { profileApi } from '@/lib/api';
+import React, { useState, useEffect } from 'react';
+import { DashboardNav } from '@/components/dashboard/DashboardNav';
+import { VideoCard } from '@/components/dashboard/VideoCard';
+import { AccessManagementPopup } from '@/components/dashboard/AccessManagementPopup';
 import AppLink from '@/components/ui/AppLink';
+import { videoApi } from '@/lib/api';
+import { useToast } from '@/hooks/useToast';
+import { getErrorMessage } from '@/lib/utils';
+import type { MyWorkVideo, SharedWithMeVideo } from '@/types/video';
 
-export default function DashboardPage() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
+const LIMIT_PREVIEW = 5;
 
-  const handleLogout = async () => {
+export default function DashboardPage(): React.ReactElement {
+  const { success, error: showError } = useToast();
+  const [myWork, setMyWork] = useState<MyWorkVideo[]>([]);
+  const [myWorkTotal, setMyWorkTotal] = useState(0);
+  const [shared, setShared] = useState<SharedWithMeVideo[]>([]);
+  const [sharedTotal, setSharedTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [accessVideo, setAccessVideo] = useState<{
+    id: string;
+    is_public: boolean;
+    public_token?: string | null;
+    public_role: 'viewer' | 'editor';
+  } | null>(null);
+
+  const fetchPreview = async () => {
+    setLoading(true);
     try {
-      await logout();
-      router.push('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
+      const [myRes, sharedRes] = await Promise.all([
+        videoApi.getMyWorks({ limit: LIMIT_PREVIEW, offset: 0 }),
+        videoApi.getSharedWithMe({ limit: LIMIT_PREVIEW, offset: 0 }),
+      ]);
+      setMyWork(myRes.data);
+      setMyWorkTotal(myRes.total);
+      setShared(sharedRes.data);
+      setSharedTotal(sharedRes.total);
+    } catch (err) {
+      showError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPreview();
+  }, []);
+
+  const handleDelete = async (videoId: string) => {
+    if (!confirm('Delete this video? This cannot be undone.')) return;
+    try {
+      await videoApi.deleteVideo(videoId);
+      success('Video deleted');
+      await fetchPreview();
+    } catch (err) {
+      showError(getErrorMessage(err));
+    }
+  };
+
+  const handleRemoveMyAccess = async (videoId: string) => {
+    if (!confirm('Remove your access to this video?')) return;
+    try {
+      await videoApi.removeMyAccess(videoId);
+      success('Access removed');
+      await fetchPreview();
+    } catch (err) {
+      showError(getErrorMessage(err));
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">FrameSync</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">
-                Welcome, {user?.name}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <DashboardNav />
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="border-4 border-dashed border-gray-200 rounded-lg p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Welcome to FrameSync Dashboard
-            </h2>
-            <p className="text-gray-600 mb-6">
-              This is your protected dashboard. You can only access this page when you're logged in.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Videos</h3>
-                <p className="text-gray-600 mb-4">Upload and synchronize your video content</p>
-                <AppLink
-                  href="/upload"
-                  className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Get Started
-                </AppLink>
-              </div>
-              
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">My Videos</h3>
-                <p className="text-gray-600 mb-4">View and manage your uploaded videos</p>
-                <button className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
-                  View Videos
-                </button>
-              </div>
-              
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Settings</h3>
-                <p className="text-gray-600 mb-4">Manage your account settings</p>
-                <AppLink
-                  href="/settings"
-                  className="inline-block px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                >
-                  Settings
-                </AppLink>
-              </div>
-            </div>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* My Work */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">My work</h2>
+            {myWorkTotal > LIMIT_PREVIEW && (
+              <AppLink
+                href="/dashboard/my"
+                className="text-sm font-medium text-blue-600 hover:text-blue-500"
+              >
+                See all ({myWorkTotal})
+              </AppLink>
+            )}
           </div>
-        </div>
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="rounded-lg border border-gray-200 bg-white aspect-video animate-pulse" />
+              ))}
+            </div>
+          ) : myWork.length === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
+              No videos yet. Use the upload button to add one.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {myWork.map((video) => (
+                <VideoCard
+                  key={video.id}
+                  video={video}
+                  isOwner
+                  onDelete={handleDelete}
+                  onManageAccess={() =>
+                    setAccessVideo({
+                      id: video.id,
+                      is_public: video.is_public,
+                      public_token: video.public_token,
+                      public_role: video.public_role,
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Shared with me */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Shared with me</h2>
+            {sharedTotal > LIMIT_PREVIEW && (
+              <AppLink
+                href="/dashboard/shared"
+                className="text-sm font-medium text-blue-600 hover:text-blue-500"
+              >
+                See all ({sharedTotal})
+              </AppLink>
+            )}
+          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="rounded-lg border border-gray-200 bg-white aspect-video animate-pulse" />
+              ))}
+            </div>
+          ) : shared.length === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
+              No videos shared with you yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {shared.map((video) => (
+                <VideoCard
+                  key={video.id}
+                  video={video}
+                  isOwner={false}
+                  onRemoveMyAccess={handleRemoveMyAccess}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </main>
+
+      {accessVideo && (
+        <AccessManagementPopup
+          videoId={accessVideo.id}
+          isPublic={accessVideo.is_public}
+          publicToken={accessVideo.public_token}
+          publicRole={accessVideo.public_role}
+          onClose={() => setAccessVideo(null)}
+          onUpdated={fetchPreview}
+        />
+      )}
     </div>
   );
 }

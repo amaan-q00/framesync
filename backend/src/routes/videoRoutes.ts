@@ -8,7 +8,10 @@ import {
   getVideo,
   shareVideo,
   removeShare,
-  updatePublicAccess
+  removeMyShare,
+  updatePublicAccess,
+  getVideoShares,
+  deleteVideo
 } from '../controllers/videoController';
 import { 
   addComment, 
@@ -31,10 +34,15 @@ router.get('/shared-with-me', protect, getSharedWithMe);
 // --- WATCHING ---
 router.get('/:id', optionalAuth, getVideo);
 
-// --- SHARING ---
+// --- SHARING & ACCESS ---
+router.get('/:id/shares', protect, getVideoShares);
 router.post('/:id/share', protect, shareVideo);
+router.delete('/:id/share/me', protect, removeMyShare);
 router.delete('/:id/share', protect, removeShare);
 router.post('/:id/public', protect, updatePublicAccess);
+
+// --- DELETE (owner only) ---
+router.delete('/:id', protect, deleteVideo);
 
 // --- NEW: COMMENTS & MARKERS ---
 // 1. Get all comments (Public or Private)
