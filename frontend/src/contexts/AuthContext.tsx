@@ -1,8 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { User, LoginCredentials, RegisterCredentials } from '@/types/auth';
-import { authApi } from '@/lib/api';
+import { authApi, onAuthError } from '@/lib/api';
+
+const PUBLIC_ROUTES = ['/login', '/register', '/'];
 
 interface AuthContextType {
   user: User | null;
@@ -11,6 +14,7 @@ interface AuthContextType {
   register: (credentials: RegisterCredentials) => Promise<void>;
   googleLogin: (token: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (user: User) => void;
   isAuthenticated: boolean;
 }
 
@@ -31,18 +35,44 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  const pathname = usePathname();
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+
+  // Handle auth errors (401s) from API calls
+  useEffect(() => {
+    const unsubscribe = onAuthError(() => {
+      setUser(null);
+      // Only redirect if not already on a public route
+      if (!isPublicRoute) {
+        router.push('/login');
+      }
+    });
+    return unsubscribe;
+  }, [router, isPublicRoute]);
 
   useEffect(() => {
+    // Skip auth check on public routes (login, register, home)
+    if (isPublicRoute) {
+      setIsLoading(false);
+      return;
+    }
+
     // Validate user session by checking current auth status
     const validateAuth = async () => {
       try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
-          credentials: 'include', // Important for cookies
+          credentials: 'include',
         });
         
         if (response.ok) {
           const data = await response.json();
           setUser(data.data.user);
+        } else if (response.status === 401) {
+          // Unauthorized - clear user and redirect
+          setUser(null);
+          router.push('/login');
         } else {
           setUser(null);
         }
@@ -54,7 +84,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     
     validateAuth();
-  }, []);
+  }, [isPublicRoute, router]);
 
   const login = async (credentials: LoginCredentials) => {
     try {
@@ -98,6 +128,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+  };
+
   const value: AuthContextType = {
     user,
     isLoading,
@@ -105,6 +139,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     googleLogin,
     logout,
+    updateUser,
     isAuthenticated: !!user,
   };
 

@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ToastContainer from "@/components/ui/ToastContainer";
 import { ToastProvider } from "@/hooks/useToast";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ToastProvider>
-            {children}
+            <ProtectedRoute>
+              {children}
+            </ProtectedRoute>
             <ToastContainer />
           </ToastProvider>
         </AuthProvider>

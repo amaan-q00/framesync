@@ -3,7 +3,7 @@ import { AppError } from '../utils/appError';
 import { AuthRequest } from '../middleware/auth';
 import pool from '../config/db';
 import { ProfileUpdateInput } from '../types';
-import { s3, BUCKET_NAME } from '../config/storage';
+import { s3, BUCKET_NAME, S3_PUBLIC_ENDPOINT } from '../config/storage';
 import { env } from '../config/env';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -57,7 +57,7 @@ export const updateProfile = async (req: AuthRequest, res: Response, next: NextF
 
     const query = `
       UPDATE users 
-      SET ${updates.join(', ')}
+      SET ${updates.join(', ')}, updated_at = NOW()
       WHERE id = $${paramIndex}
       RETURNING id, email, name, avatar_url, created_at
     `;
@@ -70,7 +70,7 @@ export const updateProfile = async (req: AuthRequest, res: Response, next: NextF
 
     res.status(200).json({
       status: 'success',
-      data: result.rows[0]
+      data: { user: result.rows[0] }
     });
   } catch (error) {
     next(error);
@@ -114,8 +114,8 @@ export const uploadAvatar = async (req: AuthRequest, res: Response, next: NextFu
 
     const s3Result = await s3.send(new PutObjectCommand(uploadParams));
     
-    // Construct the URL
-    const avatarUrl = `${env.S3_ENDPOINT}/${BUCKET_NAME}/${key}`;
+    // Construct the URL using public endpoint (localhost for dev, actual endpoint for prod)
+    const avatarUrl = `${S3_PUBLIC_ENDPOINT}/${BUCKET_NAME}/${key}`;
 
     // Update user's avatar URL in database
     await pool.query(

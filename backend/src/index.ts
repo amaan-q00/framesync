@@ -3,7 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import pool from './config/db';
-import { s3, BUCKET_NAME } from './config/storage';
+import { s3, BUCKET_NAME, initStorage } from './config/storage';
 import { CreateBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
 import createTables from './models/schema';
 import authRoutes from './routes/authRoutes';
@@ -42,6 +42,7 @@ const init = async () => {
     await pool.query('SELECT 1');
     console.log('Database Connected');
     await createTables();
+    await initStorage();
 
     // 2. Storage Setup (Bucket creation)
     try {

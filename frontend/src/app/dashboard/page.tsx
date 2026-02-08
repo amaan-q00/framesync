@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function DashboardPage() {
@@ -67,9 +68,12 @@ export default function DashboardPage() {
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Settings</h3>
                 <p className="text-gray-600 mb-4">Manage your account settings</p>
-                <button className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                <Link 
+                  href="/settings"
+                  className="inline-block px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                >
                   Settings
-                </button>
+                </Link>
               </div>
             </div>
           </div>

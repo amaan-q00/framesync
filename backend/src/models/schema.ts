@@ -11,7 +11,8 @@ const createTables = async () => {
       google_id VARCHAR(255) UNIQUE, -- Stores the Google Subject ID
       name VARCHAR(100),
       avatar_url TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     -- 2. VIDEOS TABLE

@@ -1,6 +1,22 @@
-import { LoginCredentials, RegisterCredentials, AuthResponse, GoogleAuthResponse } from '@/types/auth';
+import { LoginCredentials, RegisterCredentials, AuthResponse, GoogleAuthResponse, User } from '@/types/auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// Simple event emitter for auth errors
+type AuthErrorListener = () => void;
+const authErrorListeners: AuthErrorListener[] = [];
+
+export const onAuthError = (listener: AuthErrorListener) => {
+  authErrorListeners.push(listener);
+  return () => {
+    const index = authErrorListeners.indexOf(listener);
+    if (index > -1) authErrorListeners.splice(index, 1);
+  };
+};
+
+const emitAuthError = () => {
+  authErrorListeners.forEach(listener => listener());
+};
 
 class ApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -12,9 +28,11 @@ class ApiError extends Error {
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${API_BASE_URL}/api${endpoint}`;
   
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-  };
+  const isFormData = options.body instanceof FormData;
+  
+  const defaultHeaders: Record<string, string> = isFormData 
+    ? {} 
+    : { 'Content-Type': 'application/json' };
 
   const config: RequestInit = {
     ...options,
@@ -22,16 +40,18 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
       ...defaultHeaders,
       ...options.headers,
     },
-    credentials: 'include', // Important for cookies
+    credentials: 'include',
   };
-
-  // Token will be handled by HttpOnly cookies - no localStorage needed
 
   try {
     const response = await fetch(url, config);
     const data = await response.json();
 
     if (!response.ok) {
+      // Emit auth error on 401 to trigger logout/redirect
+      if (response.status === 401) {
+        emitAuthError();
+      }
       throw new ApiError(data.message || 'Request failed', response.status);
     }
 
@@ -69,6 +89,31 @@ export const authApi = {
   logout: async (): Promise<{ status: string; message: string }> => {
     return apiRequest('/auth/logout', {
       method: 'POST',
+    });
+  },
+};
+
+export const profileApi = {
+  getMe: async (): Promise<{ status: string; data: { user: User } }> => {
+    return apiRequest('/profile/me', {
+      method: 'GET',
+    });
+  },
+
+  updateMe: async (data: { name?: string; avatar_url?: string }): Promise<{ status: string; data: { user: User } }> => {
+    return apiRequest('/profile/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  uploadAvatar: async (file: File): Promise<{ status: string; data: { avatar_url: string } }> => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    
+    return apiRequest('/profile/avatar', {
+      method: 'POST',
+      body: formData,
     });
   },
 };
