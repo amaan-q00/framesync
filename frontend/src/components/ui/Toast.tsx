@@ -1,48 +1,66 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Check, X, AlertTriangle, Info, AlertCircle } from 'lucide-react';
+import React from 'react';
+import { Check, X, AlertTriangle, Info } from 'lucide-react';
 
-interface ToastProps {
+export type ToastVariant = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastProps {
   message: string;
-  type?: 'success' | 'error' | 'info' | 'warning';
-  duration?: number;
+  type?: ToastVariant;
   onClose: () => void;
 }
 
-const Toast: React.FC<ToastProps> = ({ 
-  message, 
-  type = 'info', 
-  onClose 
-}) => {
-  const typeStyles = {
-    success: 'bg-green-500 text-white',
-    error: 'bg-red-500 text-white',
-    warning: 'bg-yellow-500 text-black',
-    info: 'bg-blue-500 text-white',
-  };
+const variantStyles: Record<ToastVariant, { border: string; iconBg: string; icon: React.ReactNode }> = {
+  success: {
+    border: 'border-l-green-500',
+    iconBg: 'bg-green-100 text-green-600',
+    icon: <Check className="w-4 h-4 shrink-0" aria-hidden />,
+  },
+  error: {
+    border: 'border-l-red-500',
+    iconBg: 'bg-red-100 text-red-600',
+    icon: <X className="w-4 h-4 shrink-0" aria-hidden />,
+  },
+  warning: {
+    border: 'border-l-amber-500',
+    iconBg: 'bg-amber-100 text-amber-700',
+    icon: <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden />,
+  },
+  info: {
+    border: 'border-l-blue-500',
+    iconBg: 'bg-blue-100 text-blue-600',
+    icon: <Info className="w-4 h-4 shrink-0" aria-hidden />,
+  },
+};
 
-  const icons = {
-    success: <Check className="w-5 h-5" />,
-    error: <X className="w-5 h-5" />,
-    warning: <AlertTriangle className="w-5 h-5" />,
-    info: <Info className="w-5 h-5" />,
-  };
+export function Toast({ message, type = 'info', onClose }: ToastProps): React.ReactElement {
+  const style = variantStyles[type];
 
   return (
     <div
-      className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 ${typeStyles[type]} hover:scale-105`}
+      role="alert"
+      className={`
+        flex items-start gap-3 w-full max-w-sm rounded-lg border border-gray-200 border-l-4
+        bg-white px-4 py-3 shadow-sm
+        toast-enter
+        ${style.border}
+      `}
     >
-      {icons[type]}
-      <span className="text-sm font-medium">{message}</span>
+      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${style.iconBg}`}>
+        {style.icon}
+      </span>
+      <p className="flex-1 text-sm font-medium text-gray-900 pt-1">{message}</p>
       <button
+        type="button"
         onClick={onClose}
-        className="ml-4 hover:opacity-75 transition-opacity"
+        className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+        aria-label="Dismiss notification"
       >
         <X className="w-4 h-4" />
       </button>
     </div>
   );
-};
+}
 
 export default Toast;

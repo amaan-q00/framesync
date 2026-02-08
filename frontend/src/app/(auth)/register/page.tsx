@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import AppLink from '@/components/ui/AppLink';
 import { useAuth } from '@/contexts/AuthContext';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import GoogleButton from '@/components/auth/GoogleButton';
 import { RegisterCredentials } from '@/types/auth';
+import { getErrorMessage } from '@/lib/utils';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState<RegisterCredentials>({
@@ -56,11 +57,9 @@ export default function RegisterPage() {
     try {
       await register(formData);
       router.push('/dashboard');
-    } catch (error: any) {
-      setErrors({ 
-        email: error.message || 'Registration failed',
-        password: error.message || 'Registration failed'
-      });
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err) || 'Registration failed';
+      setErrors({ email: msg, password: msg });
     } finally {
       setIsLoading(false);
     }
@@ -72,8 +71,8 @@ export default function RegisterPage() {
       // TODO: Implement Google OAuth flow
       // For now, we'll show a message that it's disabled
       alert('Google login will be available soon. Please use email/password for now.');
-    } catch (error: any) {
-      console.error('Google login error:', error);
+    } catch (err: unknown) {
+      console.error('Google login error:', err);
     } finally {
       setGoogleLoading(false);
     }
@@ -97,9 +96,9 @@ export default function RegisterPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Or{' '}
-            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+            <AppLink href="/login" className="font-medium text-blue-600 hover:text-blue-500">
               sign in to your existing account
-            </Link>
+            </AppLink>
           </p>
         </div>
         

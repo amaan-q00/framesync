@@ -1,4 +1,11 @@
 import { LoginCredentials, RegisterCredentials, AuthResponse, GoogleAuthResponse, User } from '@/types/auth';
+import { 
+  InitializeUploadResponse, 
+  SignPartResponse, 
+  CompleteUploadResponse, 
+  PublicAccessResponse,
+  Video 
+} from '@/types/video';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -114,6 +121,89 @@ export const profileApi = {
     return apiRequest('/profile/avatar', {
       method: 'POST',
       body: formData,
+    });
+  },
+};
+
+export const videoApi = {
+  initializeMultipart: async (data: {
+    fileName: string;
+    fileType: string;
+    title: string;
+    description?: string;
+  }): Promise<InitializeUploadResponse> => {
+    return apiRequest('/videos/initialize', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  signPart: async (data: {
+    key: string;
+    uploadId: string;
+    partNumber: number;
+  }): Promise<SignPartResponse> => {
+    return apiRequest('/videos/sign-part', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  completeMultipart: async (data: {
+    videoId: string;
+    key: string;
+    uploadId: string;
+    parts: Array<{ ETag: string; PartNumber: number }>;
+  }): Promise<CompleteUploadResponse> => {
+    return apiRequest('/videos/complete', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  setPublicAccess: async (videoId: string, data: {
+    enabled: boolean;
+    role: 'viewer' | 'editor';
+  }): Promise<PublicAccessResponse> => {
+    return apiRequest(`/videos/${videoId}/public`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getMyWorks: async (): Promise<{ status: string; data: Video[] }> => {
+    return apiRequest('/videos/my-works', {
+      method: 'GET',
+    });
+  },
+
+  getSharedWithMe: async (): Promise<{ status: string; data: Video[] }> => {
+    return apiRequest('/videos/shared-with-me', {
+      method: 'GET',
+    });
+  },
+
+  getVideo: async (videoId: string, token?: string): Promise<{ status: string; data: Video & { role: string; manifestUrl: string } }> => {
+    const url = token ? `/videos/${videoId}?token=${token}` : `/videos/${videoId}`;
+    return apiRequest(url, {
+      method: 'GET',
+    });
+  },
+
+  shareVideo: async (videoId: string, data: {
+    email: string;
+    role?: 'viewer' | 'editor';
+  }): Promise<{ status: string; message: string }> => {
+    return apiRequest(`/videos/${videoId}/share`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  removeShare: async (videoId: string, userId: number): Promise<{ status: string; message: string }> => {
+    return apiRequest(`/videos/${videoId}/share`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
     });
   },
 };

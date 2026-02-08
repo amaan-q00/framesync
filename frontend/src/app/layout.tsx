@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { UploadProvider } from "@/contexts/UploadContext";
 import ToastContainer from "@/components/ui/ToastContainer";
 import { ToastProvider } from "@/hooks/useToast";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { UploadButtonGate } from "@/components/upload/UploadButtonGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,12 +34,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <ToastProvider>
-            <ProtectedRoute>
-              {children}
-            </ProtectedRoute>
-            <ToastContainer />
-          </ToastProvider>
+          <UploadProvider>
+            <ToastProvider>
+              <ProtectedRoute>
+                {children}
+                <UploadButtonGate />
+              </ProtectedRoute>
+              <ToastContainer />
+            </ToastProvider>
+          </UploadProvider>
         </AuthProvider>
       </body>
     </html>

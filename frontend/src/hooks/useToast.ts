@@ -1,11 +1,12 @@
- 'use client';
+'use client';
 
- import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import type { ToastVariant } from '@/components/ui/Toast';
 
 export interface Toast {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info' | 'warning';
+  type: ToastVariant;
   duration?: number;
 }
 

@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import Link from 'next/link';
+import AppLink from '@/components/ui/AppLink';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import { profileApi } from '@/lib/api';
+import { getErrorMessage } from '@/lib/utils';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { User, Camera } from 'lucide-react';
@@ -57,8 +58,8 @@ export default function SettingsPage() {
       }
       
       success('Avatar uploaded successfully');
-    } catch (err: any) {
-      error(err.message || 'Avatar upload failed');
+    } catch (err: unknown) {
+      error(getErrorMessage(err) || 'Avatar upload failed');
     } finally {
       setIsUploading(false);
     }
@@ -82,8 +83,8 @@ export default function SettingsPage() {
       }
       
       success('Profile updated successfully');
-    } catch (err: any) {
-      error(err.message || 'Profile update failed');
+    } catch (err: unknown) {
+      error(getErrorMessage(err) || 'Profile update failed');
     } finally {
       setIsLoading(false);
     }
@@ -95,17 +96,17 @@ export default function SettingsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link href="/dashboard" className="text-xl font-semibold text-gray-900 hover:text-blue-600">
+              <AppLink href="/dashboard" className="text-xl font-semibold text-gray-900 hover:text-blue-600">
                 FrameSync
-              </Link>
+              </AppLink>
             </div>
             <div className="flex items-center space-x-4">
-              <Link 
-                href="/dashboard" 
+              <AppLink
+                href="/dashboard"
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
                 Dashboard
-              </Link>
+              </AppLink>
             </div>
           </div>
         </div>
@@ -187,12 +188,12 @@ export default function SettingsPage() {
 
             {/* Submit Button */}
             <div className="flex justify-end space-x-4">
-              <Link
+              <AppLink
                 href="/dashboard"
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 Cancel
-              </Link>
+              </AppLink>
               <Button
                 type="submit"
                 disabled={isLoading || isUploading}

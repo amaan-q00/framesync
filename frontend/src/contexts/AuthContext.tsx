@@ -59,10 +59,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return;
     }
 
-    // Validate user session by checking current auth status
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const validateAuth = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+        const response = await fetch(`${apiBase}/api/auth/me`, {
           credentials: 'include',
         });
         
@@ -119,11 +119,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       await authApi.logout();
-    } catch (error) {
+    } catch (err: unknown) {
       // Continue with logout even if API call fails
-      console.error('Logout API call failed:', error);
+      console.error('Logout API call failed:', err);
     } finally {
-      // Cookie will be cleared by backend
       setUser(null);
     }
   };

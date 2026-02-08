@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import AppLink from '@/components/ui/AppLink';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import GoogleButton from '@/components/auth/GoogleButton';
 import { LoginCredentials } from '@/types/auth';
+import { getErrorMessage } from '@/lib/utils';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState<LoginCredentials>({
@@ -50,12 +51,10 @@ export default function LoginPage() {
       await login(formData);
       success('Login successful! Redirecting...');
       router.push('/dashboard');
-    } catch (err: any) {
-      error(err.message || 'Login failed');
-      setErrors({ 
-        email: err.message || 'Login failed',
-        password: err.message || 'Login failed'
-      });
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err) || 'Login failed';
+      error(msg);
+      setErrors({ email: msg, password: msg });
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +66,7 @@ export default function LoginPage() {
       // TODO: Implement Google OAuth flow
       // For now, we'll show a message that it's disabled
       warning('Google login will be available soon. Please use email/password for now.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       error('Google login failed');
       console.error('Google login error:', err);
     } finally {
@@ -93,9 +92,9 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Or{' '}
-            <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
+            <AppLink href="/register" className="font-medium text-blue-600 hover:text-blue-500">
               create a new account
-            </Link>
+            </AppLink>
           </p>
         </div>
         

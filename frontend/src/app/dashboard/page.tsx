@@ -1,15 +1,19 @@
 'use client';
 
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { profileApi } from '@/lib/api';
+import AppLink from '@/components/ui/AppLink';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const handleLogout = async () => {
     try {
       await logout();
-      window.location.href = '/login';
+      router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -52,9 +56,12 @@ export default function DashboardPage() {
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Videos</h3>
                 <p className="text-gray-600 mb-4">Upload and synchronize your video content</p>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                <AppLink
+                  href="/upload"
+                  className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
                   Get Started
-                </button>
+                </AppLink>
               </div>
               
               <div className="bg-white p-6 rounded-lg shadow">
@@ -68,12 +75,12 @@ export default function DashboardPage() {
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Settings</h3>
                 <p className="text-gray-600 mb-4">Manage your account settings</p>
-                <Link 
+                <AppLink
                   href="/settings"
                   className="inline-block px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
                 >
                   Settings
-                </Link>
+                </AppLink>
               </div>
             </div>
           </div>
