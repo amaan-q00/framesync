@@ -1,25 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export interface UseSocketResult {
+export interface UseWatchSocketResult {
   socket: Socket | null;
   connected: boolean;
 }
 
 /**
- * Connects to the backend Socket.IO server when the user is authenticated.
- * Uses credentials (cookie) for auth; no token in JS.
+ * Guest socket for the watch page: connects with public link token + videoId
+ * so unauthenticated users can join the video room and receive real-time comments.
  */
-export function useSocket(isAuthenticated: boolean): UseSocketResult {
+export function useWatchSocket(
+  videoId: string,
+  publicToken: string | undefined,
+  enabled: boolean
+): UseWatchSocketResult {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const videoIdRef = useRef(videoId);
+  videoIdRef.current = videoId;
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!enabled || !videoId || !publicToken) {
       setSocket((prev) => {
         if (prev) {
           prev.disconnect();
@@ -34,12 +40,27 @@ export function useSocket(isAuthenticated: boolean): UseSocketResult {
     const s = io(API_BASE_URL, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
+      auth: {
+        publicToken,
+        videoId,
+      },
     });
 
     setSocket(s);
-    s.on('connect', () => setConnected(true));
+
+    const onConnect = () => {
+      setConnected(true);
+      const id = videoIdRef.current;
+      if (id) s.emit('join_room', id);
+    };
+
+    s.on('connect', onConnect);
     s.on('disconnect', () => setConnected(false));
     s.on('connect_error', () => setConnected(false));
+
+    if (s.connected) {
+      s.emit('join_room', videoId);
+    }
 
     return () => {
       s.disconnect();
@@ -47,7 +68,7 @@ export function useSocket(isAuthenticated: boolean): UseSocketResult {
       setSocket(null);
       setConnected(false);
     };
-  }, [isAuthenticated]);
+  }, [enabled, videoId, publicToken]);
 
   return { socket, connected };
 }

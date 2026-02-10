@@ -4,6 +4,24 @@ import { verifyToken } from '../utils/jwt';
 import { redis } from '../config/redis';
 import { env } from '../config/env';
 import { User } from '../types';
+import pool from '../config/db';
+
+/** Parses Cookie header string into key-value map. */
+function parseCookieHeader(cookieHeader: string | undefined): Record<string, string> {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return {};
+  return cookieHeader.split(';').reduce<Record<string, string>>((acc, part) => {
+    const eq = part.indexOf('=');
+    if (eq === -1) return acc;
+    const k = part.slice(0, eq).trim();
+    const v = part.slice(eq + 1).trim();
+    if (k && v) acc[k] = decodeURIComponent(v);
+    return acc;
+  }, {});
+}
+
+export interface GuestAccess {
+  videoId: string;
+}
 
 // Strict interface for Room State stored in Redis
 interface RoomState {
@@ -80,43 +98,81 @@ export class SocketService {
   // --- INITIALIZATION ---
 
   private initialize() {
-    // 1. Authentication Middleware
+    // 1. Authentication Middleware: JWT (cookie or auth) or guest (public link token + videoId)
     this.io.use(async (socket, next) => {
-      const token = socket.handshake.auth.token || socket.handshake.headers.token;
-      
-      if (!token) {
-        return next(new Error("Authentication error: No token provided"));
+      const cookie = parseCookieHeader(socket.handshake.headers.cookie);
+      const token =
+        (socket.handshake.auth?.token as string | undefined) ??
+        (socket.handshake.headers?.token as string | undefined) ??
+        cookie.auth_token;
+
+      if (token) {
+        const isBlacklisted = await redis.get(`blacklist:${token}`);
+        if (isBlacklisted) {
+          return next(new Error("Token revoked"));
+        }
+        try {
+          const user = await verifyToken(token);
+          socket.data.user = user;
+          socket.data.guestAccess = undefined;
+          return next();
+        } catch {
+          // Fall through to guest path if JWT invalid
+        }
       }
-      const isBlacklisted = await redis.get(`blacklist:${token}`);
-      if (isBlacklisted) {
-        return next(new Error("Token revoked"));
+
+      // Guest path: public link token + videoId (for watch page real-time comments)
+      const publicToken = socket.handshake.auth?.publicToken as string | undefined;
+      const videoId = socket.handshake.auth?.videoId as string | undefined;
+      if (publicToken && videoId) {
+        try {
+          const row = await pool.query(
+            'SELECT id FROM videos WHERE id = $1 AND is_public = true AND public_token = $2',
+            [videoId, publicToken]
+          );
+          if (row.rowCount && row.rowCount > 0) {
+            socket.data.user = undefined;
+            socket.data.guestAccess = { videoId };
+            return next();
+          }
+        } catch {
+          // DB error: reject
+        }
       }
-      try {
-        const user = await verifyToken(token as string);
-        socket.data.user = user;
-        next();
-      } catch (err) {
-        next(new Error("Authentication error: Invalid token"));
-      }
+
+      return next(new Error("Authentication error: No valid token or guest access"));
     });
 
     // 2. Event Handlers
     this.io.on('connection', (socket) => {
-      this.handleRoomLogic(socket);
-      this.handleSyncLogic(socket);
-      this.handleLockLogic(socket);
-      this.handleEphemeral(socket);
+      const user = socket.data.user as User | undefined;
+      const guestAccess = socket.data.guestAccess as GuestAccess | undefined;
 
-      socket.on('disconnect', async () => {
-        // Implementation for cleanup if needed
-      });
+      if (user) {
+        socket.join(`user:${user.id}`);
+      }
+
+      this.handleRoomLogic(socket, guestAccess);
+
+      if (user) {
+        this.handleSyncLogic(socket);
+        this.handleLockLogic(socket);
+        this.handleEphemeral(socket);
+      }
     });
   }
 
   // --- 1. ROOM MANAGEMENT & LATE JOINERS ---
-  
-  private handleRoomLogic(socket: Socket) {
+  /** Guest can only join the single video room they have access to. */
+  private handleRoomLogic(socket: Socket, guestAccess: GuestAccess | undefined) {
     socket.on('join_room', async (videoId: string) => {
+      const user = socket.data.user as User | undefined;
+      const guest = socket.data.guestAccess as GuestAccess | undefined;
+      const allowed = user !== undefined || (guest?.videoId === videoId);
+      if (!allowed) {
+        socket.emit('error_msg', 'You can only join the video room you have access to');
+        return;
+      }
       socket.join(videoId);
       
       const room = await this.getRoomState(videoId);

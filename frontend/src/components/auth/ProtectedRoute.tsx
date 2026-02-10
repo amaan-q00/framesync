@@ -7,21 +7,30 @@ import { useAuth } from '@/contexts/AuthContext';
 // Public routes that don't require authentication
 const PUBLIC_ROUTES = ['/login', '/register', '/'];
 
+/** Watch pages are public so shared links with ?token= work without login (backend uses optionalAuth). */
+function isPublicPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (PUBLIC_ROUTES.includes(pathname)) return true;
+  if (pathname.startsWith('/watch/')) return true;
+  return false;
+}
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const isPublic = isPublicPath(pathname);
 
   useEffect(() => {
     // Don't redirect while loading
     if (isLoading) return;
 
     // If not authenticated and on a protected route, redirect to login
-    if (!isAuthenticated && !PUBLIC_ROUTES.includes(pathname)) {
+    if (!isAuthenticated && !isPublic) {
       router.push('/login');
     }
 
@@ -44,7 +53,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // Don't render protected content if not authenticated
-  if (!isAuthenticated && !PUBLIC_ROUTES.includes(pathname)) {
+  if (!isAuthenticated && !isPublic) {
     return null;
   }
 

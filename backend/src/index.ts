@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -12,6 +13,7 @@ import profileRoutes from './routes/profileRoutes';
 import { globalErrorHandler } from './middleware/errorHandler';
 import { initWorker } from './services/worker';
 import { initCronJobs } from './services/cronService';
+import { SocketService } from './services/socketService';
 
 const app = express();
 
@@ -79,8 +81,12 @@ const init = async () => {
     // 5. Cron
     initCronJobs();
 
-    // 6. Server
-    app.listen(env.PORT, () => {
+    // 6. HTTP server and Socket.IO
+    const server = http.createServer(app);
+    new SocketService(server);
+
+    // 7. Listen
+    server.listen(env.PORT, () => {
       console.log(`Server running on port ${env.PORT}`);
     });
 

@@ -2,7 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { 
   CreateMultipartUploadCommand, 
   UploadPartCommand, 
-  CompleteMultipartUploadCommand 
+  CompleteMultipartUploadCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomBytes } from 'crypto';
@@ -10,6 +12,7 @@ import pool from '../config/db';
 import { redis } from '../config/redis';
 import { s3, s3Signer, BUCKET_NAME } from '../config/storage';
 import { addVideoJob } from '../services/queueService';
+import { SocketService } from '../services/socketService';
 import { AppError } from '../utils/appError';
 import { AuthRequest } from '../middleware/auth';
 import { env } from '../config/env';
@@ -182,6 +185,11 @@ export const shareVideo = async (req: AuthRequest, res: Response, next: NextFunc
       [id, targetUserId, role || 'viewer']
     );
 
+    try {
+      SocketService.getInstance().getIO().to(`user:${targetUserId}`).emit('share:added', { videoId: id });
+    } catch {
+      // Socket not initialized
+    }
     res.status(200).json({ status: 'success', message: 'User added to video' });
   } catch (error) {
     next(error);
@@ -200,6 +208,11 @@ export const removeShare = async (req: AuthRequest, res: Response, next: NextFun
      }
 
      await pool.query('DELETE FROM video_shares WHERE video_id = $1 AND user_id = $2', [id, userId]);
+     try {
+       SocketService.getInstance().getIO().to(`user:${userId}`).emit('share:removed', { videoId: id });
+     } catch {
+       // Socket not initialized
+     }
      res.status(200).json({ status: 'success', message: 'User removed' });
   } catch (error) {
     next(error);
@@ -262,16 +275,42 @@ export const getVideoShares = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
-// DELETE /api/videos/:id (Owner only – deletes video and cascades)
+// Helper: delete all S3 objects under a prefix (used for video + thumbnail cleanup)
+const deleteS3Prefix = async (prefix: string): Promise<void> => {
+  const listResult = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET_NAME, Prefix: prefix }));
+  if (!listResult.Contents?.length) return;
+  await s3.send(new DeleteObjectsCommand({
+    Bucket: BUCKET_NAME,
+    Delete: { Objects: listResult.Contents.map(obj => ({ Key: obj.Key! })), Quiet: true },
+  }));
+  if (listResult.IsTruncated) await deleteS3Prefix(prefix);
+};
+
+// DELETE /api/videos/:id (Owner only – deletes video and cascades, plus S3 video + thumbnail)
 export const deleteVideo = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   try {
     const videoCheck = await pool.query('SELECT user_id FROM videos WHERE id = $1', [id]);
     if (videoCheck.rowCount === 0) return next(new AppError('Video not found', 404));
-    if (videoCheck.rows[0].user_id !== req.user?.userId) {
+    const ownerId = videoCheck.rows[0].user_id as number;
+    if (ownerId !== req.user?.userId) {
       return next(new AppError('Only the owner can delete this video', 403));
     }
+    const sharedRows = await pool.query<{ user_id: number }>(
+      'SELECT user_id FROM video_shares WHERE video_id = $1',
+      [id]
+    );
+    const sharedUserIds = sharedRows.rows.map((r) => r.user_id);
+    await deleteS3Prefix(`videos/${id}/`);
+    await deleteS3Prefix(`thumbnails/${id}/`);
     await pool.query('DELETE FROM videos WHERE id = $1', [id]);
+    try {
+      const io = SocketService.getInstance().getIO();
+      io.to(`user:${ownerId}`).emit('video:deleted', { videoId: id });
+      sharedUserIds.forEach((uid) => io.to(`user:${uid}`).emit('video:deleted', { videoId: id }));
+    } catch {
+      // Socket not initialized
+    }
     res.status(200).json({ status: 'success', message: 'Video deleted' });
   } catch (error) {
     next(error);
@@ -283,12 +322,21 @@ export const removeMyShare = async (req: AuthRequest, res: Response, next: NextF
   const { id } = req.params as { id: string };
   const userId = req.user?.userId;
   try {
+    const ownerRow = await pool.query<{ user_id: number }>('SELECT user_id FROM videos WHERE id = $1', [id]);
+    const ownerId = ownerRow.rowCount ? ownerRow.rows[0]?.user_id : undefined;
     const deleted = await pool.query(
       'DELETE FROM video_shares WHERE video_id = $1 AND user_id = $2 RETURNING 1',
       [id, userId]
     );
     if (deleted.rowCount === 0) {
       return next(new AppError('Share not found or you do not have access', 404));
+    }
+    if (ownerId != null) {
+      try {
+        SocketService.getInstance().getIO().to(`user:${ownerId}`).emit('share:removed', { videoId: id });
+      } catch {
+        // Socket not initialized
+      }
     }
     res.status(200).json({ status: 'success', message: 'Access removed' });
   } catch (error) {

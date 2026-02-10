@@ -4,6 +4,7 @@ import React, { createContext, useContext, ReactNode, useEffect } from 'react';
 import { useUpload } from '@/hooks/useUpload';
 import { UploadSession } from '@/types/video';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDashboardSync } from '@/contexts/DashboardSyncContext';
 
 interface UploadContextType {
   uploads: UploadSession[];
@@ -34,7 +35,10 @@ interface UploadProviderProps {
 }
 
 export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
-  const uploadHook = useUpload();
+  const { notifyUploadComplete } = useDashboardSync();
+  const uploadHook = useUpload({
+    onUploadComplete: notifyUploadComplete,
+  });
   const { user } = useAuth();
 
   // Cancel and clear all uploads when user logs out or becomes unauthenticated

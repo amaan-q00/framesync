@@ -2,6 +2,7 @@
 
 import React from 'react';
 import AppLink from '@/components/ui/AppLink';
+import { Upload as UploadIcon, ArrowLeft, Settings } from 'lucide-react';
 import { useUploadContext } from '@/contexts/UploadContext';
 import { useUploadForm } from '@/hooks/useUploadForm';
 import { DropZone } from '@/components/upload/DropZone';
@@ -22,35 +23,40 @@ export default function UploadPage(): React.ReactElement {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="border-b border-gray-200 bg-white">
+      <nav className="sticky top-0 z-10 border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
+          <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
             <AppLink
               href="/dashboard"
-              className="text-xl font-semibold text-gray-900 hover:text-blue-600"
+              className="text-lg sm:text-xl font-semibold text-gray-900 hover:text-blue-600 shrink-0"
             >
               FrameSync
             </AppLink>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <AppLink
                 href="/dashboard"
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="flex items-center gap-1.5 rounded-lg p-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               >
-                Dashboard
+                <ArrowLeft size={18} aria-hidden />
+                <span className="hidden sm:inline">Dashboard</span>
               </AppLink>
               <AppLink
                 href="/settings"
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="flex items-center gap-1.5 rounded-lg p-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               >
-                Settings
+                <Settings size={18} aria-hidden />
+                <span className="hidden sm:inline">Settings</span>
               </AppLink>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Upload videos</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
+        <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-gray-900 mb-6">
+          <UploadIcon size={28} className="shrink-0 text-gray-600" aria-hidden />
+          Upload videos
+        </h1>
 
         {!showForm ? (
           <DropZone onFilesAdded={handleFilesAdded} />

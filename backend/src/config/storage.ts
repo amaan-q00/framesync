@@ -78,7 +78,8 @@ export const initStorage = async () => {
           Action: ["s3:GetObject"],
           Resource: [
             `arn:aws:s3:::${BUCKET_NAME}/videos/*`,
-            `arn:aws:s3:::${BUCKET_NAME}/avatars/*`
+            `arn:aws:s3:::${BUCKET_NAME}/avatars/*`,
+            `arn:aws:s3:::${BUCKET_NAME}/thumbnails/*`
             // Note: 'raw/*' is NOT included here, keeping original uploads private
           ]
         }
@@ -92,7 +93,7 @@ export const initStorage = async () => {
     });
 
     await s3.send(command);
-    console.log('Storage Policy Sync: /videos and /avatars are PUBLIC.');
+    console.log('Storage Policy Sync: /videos, /avatars and /thumbnails are PUBLIC.');
 
   } catch (error) {
     console.error('Storage Init Failed:', error);

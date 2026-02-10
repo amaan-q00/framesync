@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Public routes that don't require authentication
-const PUBLIC_ROUTES = ['/login', '/register', '/api/auth'];
+// Public routes that don't require authentication (path prefix or exact match)
+const PUBLIC_ROUTES = ['/login', '/register', '/api/auth', '/watch'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // Check if route is public
-  const isPublicRoute = PUBLIC_ROUTES.some(route => 
-    pathname.startsWith(route) || pathname === '/'
-  );
-  
-  // Get auth token from cookies
+
+  const isPublicRoute =
+    pathname === '/' ||
+    PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
+
   const authToken = request.cookies.get('auth_token')?.value;
-  
-  // If no auth token and trying to access protected route, redirect to login
+
   if (!authToken && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);

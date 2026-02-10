@@ -71,10 +71,9 @@ const cleanupExpiredVideos = async () => {
 
     for (const video of result.rows) {
       const videoId = video.id;
-      const folderPrefix = `videos/${videoId}/`;
+      await deleteFolder(`videos/${videoId}/`);
+      await deleteFolder(`thumbnails/${videoId}/`);
 
-      await deleteFolder(folderPrefix);
-      
       await pool.query('DELETE FROM videos WHERE id = $1', [videoId]);
       console.log(`Purged Video: ${videoId}`);
     }

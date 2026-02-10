@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DashboardSyncProvider } from "@/contexts/DashboardSyncContext";
 import { UploadProvider } from "@/contexts/UploadContext";
 import ToastContainer from "@/components/ui/ToastContainer";
 import { ToastProvider } from "@/hooks/useToast";
@@ -34,7 +35,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <UploadProvider>
+          <DashboardSyncProvider>
+            <UploadProvider>
             <ToastProvider>
               <ProtectedRoute>
                 {children}
@@ -42,7 +44,8 @@ export default function RootLayout({
               </ProtectedRoute>
               <ToastContainer />
             </ToastProvider>
-          </UploadProvider>
+            </UploadProvider>
+          </DashboardSyncProvider>
         </AuthProvider>
       </body>
     </html>

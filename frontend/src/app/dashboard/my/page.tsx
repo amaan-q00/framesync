@@ -1,20 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { VideoCard } from '@/components/dashboard/VideoCard';
 import { AccessManagementPopup } from '@/components/dashboard/AccessManagementPopup';
 import AppLink from '@/components/ui/AppLink';
 import { videoApi } from '@/lib/api';
 import { useToast } from '@/hooks/useToast';
+import { useDashboardSync } from '@/contexts/DashboardSyncContext';
 import { getErrorMessage } from '@/lib/utils';
 import type { MyWorkVideo } from '@/types/video';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, ArrowLeft } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
 export default function DashboardMyPage(): React.ReactElement {
   const { success, error: showError } = useToast();
+  const { subscribeRefetchMyWork } = useDashboardSync();
   const [videos, setVideos] = useState<MyWorkVideo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -44,9 +46,20 @@ export default function DashboardMyPage(): React.ReactElement {
     }
   };
 
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const fetchPageRef = useRef(fetchPage);
+  fetchPageRef.current = fetchPage;
+
   useEffect(() => {
     fetchPage(page);
   }, [page]);
+
+  useEffect(() => {
+    const refetch = () => fetchPageRef.current(pageRef.current);
+    const unsub = subscribeRefetchMyWork(refetch);
+    return unsub;
+  }, [subscribeRefetchMyWork]);
 
   const handleDelete = async (videoId: string) => {
     if (!confirm('Delete this video? This cannot be undone.')) return;
@@ -63,16 +76,23 @@ export default function DashboardMyPage(): React.ReactElement {
     <div className="min-h-screen bg-gray-50">
       <DashboardNav />
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">My work</h1>
-          <AppLink href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
-            ← Dashboard
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-gray-900">
+            <Video size={24} className="shrink-0 text-gray-600" aria-hidden />
+            My work
+          </h1>
+          <AppLink
+            href="/dashboard"
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 w-fit"
+          >
+            <ArrowLeft size={18} aria-hidden />
+            Dashboard
           </AppLink>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="rounded-lg border border-gray-200 bg-white aspect-video animate-pulse" />
             ))}
@@ -83,7 +103,7 @@ export default function DashboardMyPage(): React.ReactElement {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {videos.map((video) => (
                 <VideoCard
                   key={video.id}
@@ -103,29 +123,29 @@ export default function DashboardMyPage(): React.ReactElement {
             </div>
 
             {totalPages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
-                >
-                  <ChevronLeft size={18} />
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
-                >
-                  Next
-                  <ChevronRight size={18} />
-                </button>
-              </div>
+            <div className="mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
+              >
+                <ChevronLeft size={18} aria-hidden />
+                Previous
+              </button>
+              <span className="text-sm text-gray-600">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
+              >
+                Next
+                <ChevronRight size={18} aria-hidden />
+              </button>
+            </div>
             )}
           </>
         )}

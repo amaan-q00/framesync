@@ -30,10 +30,16 @@ function completedProgress(chunks: UploadChunk[]): number {
   return chunks.length === 0 ? 0 : Math.round((completed / chunks.length) * 100);
 }
 
-export function useUpload() {
+export interface UseUploadOptions {
+  onUploadComplete?: (videoId: string) => void;
+}
+
+export function useUpload(options?: UseUploadOptions) {
   const [uploads, setUploads] = useState<UploadSession[]>([]);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const isMountedRef = useRef(true);
+  const onUploadCompleteRef = useRef(options?.onUploadComplete);
+  onUploadCompleteRef.current = options?.onUploadComplete;
 
   const updateUpload = useCallback((videoId: string, updates: Partial<UploadSession>) => {
     setUploads((prev) =>
@@ -192,6 +198,7 @@ export function useUpload() {
 
         if (!isMountedRef.current || signal.aborted) return;
         updateUpload(upload.videoId, { status: 'complete', progress: 100 });
+        onUploadCompleteRef.current?.(upload.videoId);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           updateUpload(upload.videoId, {
