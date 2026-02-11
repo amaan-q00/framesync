@@ -81,22 +81,45 @@ export const addComment = async (
       ? Math.round(parseFloat(duration) * fps)
       : 0;
 
-    // 5. Insert with Frame Data
+    // 5. Normalize drawing_data for JSONB: array of strokes (legacy) or { segments: [{ startTime, endTime, strokes }] }
+    let drawingDataForDb: string | null = null;
+    if (drawing_data != null) {
+      try {
+        const parsed =
+          typeof drawing_data === "string"
+            ? JSON.parse(drawing_data)
+            : drawing_data;
+        if (Array.isArray(parsed)) {
+          drawingDataForDb = parsed.length > 0 ? JSON.stringify(parsed) : "[]";
+        } else if (
+          parsed &&
+          typeof parsed === "object" &&
+          Array.isArray(parsed.segments) &&
+          parsed.segments.length > 0
+        ) {
+          drawingDataForDb = JSON.stringify(parsed);
+        }
+      } catch {
+        drawingDataForDb = null;
+      }
+    }
+
+    // 6. Insert with Frame Data (cast $9 to jsonb when string for pg)
     const result = await pool.query(
       `INSERT INTO comments 
         (video_id, user_id, guest_name, text, timestamp, frame_number, duration_frames, type, drawing_data, color)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
        RETURNING *`,
       [
         id,
         req.user?.userId || null,
         req.user ? null : guestName,
-        text || "",
+        text ?? "",
         timestamp,
         frameNumber, // The Source of Truth
         durationFrames,
         type || "text",
-        drawing_data || null,
+        drawingDataForDb,
         color || "#FF0000",
       ],
     );

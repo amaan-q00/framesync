@@ -8,6 +8,7 @@ import {
   MyWorkVideo,
   SharedWithMeVideo,
   VideoShareEntry,
+  Comment,
 } from '@/types/video';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -224,5 +225,41 @@ export const videoApi = {
       method: 'DELETE',
       body: JSON.stringify({ userId }),
     });
+  },
+
+  getComments: async (videoId: string, token?: string): Promise<{ status: string; data: Comment[] }> => {
+    const url = token ? `/videos/${videoId}/comments?token=${token}` : `/videos/${videoId}/comments`;
+    return apiRequest(url, { method: 'GET' });
+  },
+
+  addComment: async (
+    videoId: string,
+    body: {
+      text?: string;
+      timestamp: number;
+      type: 'chat' | 'marker' | 'shape';
+      drawing_data?: unknown;
+      color?: string;
+      duration?: number;
+      guestName?: string;
+    },
+    token?: string
+  ): Promise<{ status: string; data: Comment }> => {
+    const url = token ? `/videos/${videoId}/comments?token=${token}` : `/videos/${videoId}/comments`;
+    return apiRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteComment: async (
+    videoId: string,
+    commentId: string,
+    token?: string
+  ): Promise<{ status: string; message: string }> => {
+    const url = token
+      ? `/videos/${videoId}/comments/${commentId}?token=${token}`
+      : `/videos/${videoId}/comments/${commentId}`;
+    return apiRequest(url, { method: 'DELETE' });
   },
 };

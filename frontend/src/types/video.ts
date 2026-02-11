@@ -102,3 +102,38 @@ export interface PublicAccessResponse {
     public_role: 'viewer' | 'editor';
   };
 }
+
+/** One segment of a multi-segment marker (strokes with a time range) */
+export interface MarkerSegmentPayload {
+  startTime: number;
+  endTime: number;
+  strokes: DrawingStroke[];
+}
+
+/** drawing_data: legacy array of strokes, or multi-segment marker */
+export type CommentDrawingData = DrawingStroke[] | { segments: MarkerSegmentPayload[] };
+
+/** Comment / marker / shape for watch-together */
+export interface Comment {
+  id: string;
+  video_id: string;
+  user_id: number | null;
+  guest_name: string | null;
+  text: string | null;
+  drawing_data: CommentDrawingData | null;
+  color: string;
+  type: 'chat' | 'marker' | 'shape';
+  timestamp: number;
+  frame_number: number;
+  duration_frames: number;
+  is_resolved: boolean;
+  created_at: string;
+  user_name?: string;
+  user_avatar?: string | null;
+}
+
+export interface DrawingStroke {
+  points: Array<{ x: number; y: number }>;
+  color: string;
+  width: number;
+}

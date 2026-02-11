@@ -61,28 +61,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [router, isPublicRoute]);
 
   useEffect(() => {
-    // Skip auth check on public routes (login, register, home, watch)
-    if (isPublicRoute) {
-      setIsLoading(false);
-      return;
-    }
-
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const validateAuth = async () => {
       try {
         const response = await fetch(`${apiBase}/api/auth/me`, {
           credentials: 'include',
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           setUser(data.data.user);
-        } else if (response.status === 401) {
-          // Unauthorized - clear user and redirect
-          setUser(null);
-          router.push('/login');
         } else {
           setUser(null);
+          // Only redirect to login on 401 when not on a public route (e.g. watch page with cookie still valid after refresh)
+          if (!isPublicRoute && response.status === 401) {
+            router.push('/login');
+          }
         }
       } catch (error) {
         setUser(null);
@@ -90,7 +84,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
       }
     };
-    
+
     validateAuth();
   }, [isPublicRoute, router]);
 
