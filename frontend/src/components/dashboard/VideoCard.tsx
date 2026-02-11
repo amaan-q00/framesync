@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { MoreVertical, Trash2, Share2, UserMinus, Video, Lock } from 'lucide-react';
 import type { MyWorkVideo, SharedWithMeVideo } from '@/types/video';
 
@@ -30,6 +30,7 @@ export function VideoCard({
   onManageAccess,
   onRemoveMyAccess,
 }: VideoCardProps): React.ReactElement {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const thumbnailUrl = video.thumbnail_url ?? null;
@@ -64,33 +65,37 @@ export function VideoCard({
     </h3>
   );
 
+  const handleCardClick = () => {
+    if (isReady) router.push(`/watch/${video.id}`);
+  };
+
   return (
-    <div className="group relative rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-visible">
-      {isReady ? (
-        <Link
-          href={`/watch/${video.id}`}
-          className="block h-28 w-full bg-gray-100 overflow-hidden rounded-t-lg relative"
-        >
-          {thumbnailContent}
-        </Link>
-      ) : (
-        <div className="block h-28 w-full bg-gray-100 overflow-hidden rounded-t-lg relative cursor-default">
-          {thumbnailContent}
-        </div>
-      )}
+    <div
+      role={isReady ? 'button' : undefined}
+      tabIndex={isReady ? 0 : undefined}
+      onClick={isReady ? handleCardClick : undefined}
+      onKeyDown={
+        isReady
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleCardClick();
+              }
+            }
+          : undefined
+      }
+      className={`group relative rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-visible ${
+        isReady ? 'cursor-pointer' : ''
+      }`}
+    >
+      <div className="block h-28 w-full bg-gray-100 overflow-hidden rounded-t-lg relative">
+        {thumbnailContent}
+      </div>
 
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            {isReady ? (
-              <Link href={`/watch/${video.id}`} className="block min-w-0">
-                {titleContent}
-              </Link>
-            ) : (
-              <div className="block min-w-0 cursor-default">
-                {titleContent}
-              </div>
-            )}
+            <div className="block min-w-0">{titleContent}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
               <span className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700">
                 {statusLabel}
@@ -110,7 +115,7 @@ export function VideoCard({
           </div>
 
           {isReady && (
-            <div className="relative shrink-0">
+            <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 onClick={() => setMenuOpen((o) => !o)}

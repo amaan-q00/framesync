@@ -10,6 +10,7 @@ import { videoApi } from '@/lib/api';
 import { useToast } from '@/hooks/useToast';
 import { useWatchSocket } from '@/hooks/useWatchSocket';
 import { getErrorMessage } from '@/lib/utils';
+import { HlsPlayer } from '@/components/watch/HlsPlayer';
 
 export default function WatchPage(): React.ReactElement {
   const params = useParams();
@@ -91,13 +92,14 @@ export default function WatchPage(): React.ReactElement {
         <span className="text-xs text-gray-500 capitalize">{video.role}</span>
       </div>
       <div className="flex flex-col items-center justify-center p-8">
-        {video.manifestUrl ? (
-          <p className="text-gray-400 text-sm mb-4">
-            HLS manifest: {video.manifestUrl.slice(0, 60)}…
-          </p>
-        ) : null}
-        <div className="w-full max-w-4xl aspect-video rounded-lg bg-black flex items-center justify-center text-gray-500">
-          Video player (HLS) can be embedded here using the manifest URL.
+        <div className="w-full max-w-4xl aspect-video rounded-lg overflow-hidden bg-black">
+          {video.manifestUrl ? (
+            <HlsPlayer manifestUrl={video.manifestUrl} className="rounded-lg" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-500">
+              No playable stream available yet.
+            </div>
+          )}
         </div>
       </div>
     </div>
