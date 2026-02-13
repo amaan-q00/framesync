@@ -18,6 +18,12 @@ export interface DrawingCanvasProps {
   markerPreviewSegments?: Array<{ startTime: number; endTime: number; strokes: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }> }>;
   strokeColor?: string;
   remoteStrokes: DrawingStrokePayload[];
+  /** Ephemeral live annotations (auto-clear after ~1s); only in live mode */
+  ephemeralStrokes?: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }>;
+  /** When true, user can draw ephemeral strokes (no lock) in live mode */
+  canDrawEphemeral?: boolean;
+  /** When true, strokes are ephemeral (not added to sessionStrokes so they disappear after TTL) */
+  isEphemeralStroke?: boolean;
   /** Comments with type shape or marker to render when in frame range */
   shapeComments: Comment[];
   currentFrame: number;
@@ -38,6 +44,9 @@ export function DrawingCanvas({
   markerPreviewSegments = [],
   strokeColor = DEFAULT_STROKE_COLOR,
   remoteStrokes,
+  ephemeralStrokes = [],
+  canDrawEphemeral = false,
+  isEphemeralStroke = false,
   shapeComments,
   currentFrame,
   currentTime = 0,
@@ -55,7 +64,7 @@ export function DrawingCanvas({
   const drawingRef = useRef(false);
   const currentPointsRef = useRef<Array<{ x: number; y: number }>>([]);
 
-  const canDraw = iHaveLock || markerModeActive;
+  const canDraw = iHaveLock || markerModeActive || canDrawEphemeral;
 
   const getNorm = useCallback((e: React.PointerEvent | PointerEvent) => {
     const canvas = canvasRef.current;
@@ -166,6 +175,7 @@ export function DrawingCanvas({
     ...visibleShapes.flatMap(strokesFromComment),
     ...previewStrokes,
     ...remoteStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })),
+    ...ephemeralStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })),
     ...sessionStrokes,
     ...(markerModeActive ? markerStrokes : []),
   ];
@@ -232,12 +242,12 @@ export function DrawingCanvas({
             onMarkerStroke?.(stroke);
           } else {
             onStroke(stroke);
-            setSessionStrokes((prev) => [...prev, stroke]);
+            if (!isEphemeralStroke) setSessionStrokes((prev) => [...prev, stroke]);
           }
         }
       }
     },
-    [canDraw, markerModeActive, strokeColor, onStroke, onMarkerStroke]
+    [canDraw, markerModeActive, isEphemeralStroke, strokeColor, onStroke, onMarkerStroke]
   );
 
   const handlePointerLeave = useCallback(() => {
@@ -250,11 +260,11 @@ export function DrawingCanvas({
           onMarkerStroke?.(stroke);
         } else {
           onStroke(stroke);
-          setSessionStrokes((prev) => [...prev, stroke]);
+          if (!isEphemeralStroke) setSessionStrokes((prev) => [...prev, stroke]);
         }
       }
     }
-  }, [markerModeActive, strokeColor, onStroke, onMarkerStroke]);
+  }, [markerModeActive, isEphemeralStroke, strokeColor, onStroke, onMarkerStroke]);
 
   const handleSaveDrawing = useCallback(() => {
     if (sessionStrokes.length === 0) return;

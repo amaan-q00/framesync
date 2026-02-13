@@ -8,6 +8,12 @@ export interface RoomStatePayload {
   initialStatus: 'playing' | 'paused';
 }
 
+/** Payload when someone requested to become host (for current host UI) */
+export interface HostRequestedPayload {
+  userId: number;
+  userName: string;
+}
+
 /** Sync update from host (passengers receive this) */
 export interface SyncUpdatePayload {
   timestamp?: number;
@@ -32,4 +38,11 @@ export interface DrawingStrokePayload {
   points: Array<{ x: number; y: number }>;
   color: string;
   width: number;
+}
+
+/** Ephemeral live annotation (received, with receivedAt for TTL) */
+export interface EphemeralStrokePayload extends DrawingStrokePayload {
+  userId?: number;
+  userName?: string;
+  receivedAt: number;
 }

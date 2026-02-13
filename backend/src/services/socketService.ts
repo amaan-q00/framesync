@@ -40,6 +40,9 @@ interface RoomState {
     username: string;
     expiresAt: number;
   } | null;
+
+  // Host handover: who requested to become host (visible to current host only)
+  pendingHostRequest: { userId: number; userName: string } | null;
 }
 
 const DEFAULT_ROOM_STATE: RoomState = {
@@ -49,7 +52,8 @@ const DEFAULT_ROOM_STATE: RoomState = {
   lastTimestamp: 0,
   lastStatus: 'paused',
   lastHeartbeatAt: Date.now(),
-  markerLock: null
+  markerLock: null,
+  pendingHostRequest: null,
 };
 
 export class SocketService {
@@ -57,6 +61,8 @@ export class SocketService {
   private static instance: SocketService;
   private readonly ROOM_PREFIX = 'room:state:';
   private readonly LOCK_DURATION_MS = 30000; // 30 seconds
+  /** socketId -> videoId: so we can end live when host disconnects */
+  private hostSocketToVideoId = new Map<string, string>();
 
   constructor(httpServer: HttpServer) {
     this.io = new Server(httpServer, {
@@ -87,12 +93,27 @@ export class SocketService {
   private async getRoomState(videoId: string): Promise<RoomState> {
     const raw = await redis.get(`${this.ROOM_PREFIX}${videoId}`);
     if (!raw) return { ...DEFAULT_ROOM_STATE };
-    return JSON.parse(raw);
+    return { ...DEFAULT_ROOM_STATE, ...JSON.parse(raw) };
   }
 
   private async saveRoomState(videoId: string, state: RoomState): Promise<void> {
     // Expire room state after 24 hours of inactivity
     await redis.setex(`${this.ROOM_PREFIX}${videoId}`, 86400, JSON.stringify(state));
+  }
+
+  /** True if userId is video owner or has editor share (for claim_host / request_become_host). */
+  private async isEditorForVideo(videoId: string, userId: number): Promise<boolean> {
+    const videoRes = await pool.query(
+      "SELECT user_id FROM videos WHERE id = $1",
+      [videoId]
+    );
+    if (videoRes.rowCount === 0) return false;
+    if (videoRes.rows[0].user_id === userId) return true;
+    const shareRes = await pool.query(
+      "SELECT role FROM video_shares WHERE video_id = $1 AND user_id = $2",
+      [videoId, userId]
+    );
+    return (shareRes.rowCount ?? 0) > 0 && shareRes.rows[0].role === "editor";
   }
 
   // --- INITIALIZATION ---
@@ -159,7 +180,24 @@ export class SocketService {
         this.handleLockLogic(socket);
         this.handleEphemeral(socket);
       }
+
+      socket.on('disconnect', () => this.handleHostDisconnect(socket));
     });
+  }
+
+  private async handleHostDisconnect(socket: Socket): Promise<void> {
+    const videoId = this.hostSocketToVideoId.get(socket.id);
+    this.hostSocketToVideoId.delete(socket.id);
+    if (!videoId) return;
+    const room = await this.getRoomState(videoId);
+    if (!room.isLive || room.hostId === null) return;
+    room.isLive = false;
+    room.hostId = null;
+    room.hostName = null;
+    room.pendingHostRequest = null;
+    room.markerLock = null;
+    await this.saveRoomState(videoId, room);
+    this.io.to(videoId).emit('session_ended');
   }
 
   // --- 1. ROOM MANAGEMENT & LATE JOINERS ---
@@ -209,8 +247,13 @@ export class SocketService {
   private handleSyncLogic(socket: Socket) {
     const user = socket.data.user as User;
 
-    // A. Claim Host (Go Live)
+    // A. Claim Host (Go Live) — editors only
     socket.on('claim_host', async (videoId: string) => {
+      const allowed = await this.isEditorForVideo(videoId, user.id);
+      if (!allowed) {
+        socket.emit('error_msg', 'Only editors can go live');
+        return;
+      }
       const room = await this.getRoomState(videoId);
       
       room.hostId = user.id;
@@ -220,6 +263,7 @@ export class SocketService {
       
       await this.saveRoomState(videoId, room);
 
+      this.hostSocketToVideoId.set(socket.id, videoId);
       this.io.to(videoId).emit('host_changed', { 
         hostId: room.hostId, 
         hostName: room.hostName 
@@ -254,6 +298,52 @@ export class SocketService {
     socket.on('end_session', async (videoId: string) => {
       const room = await this.getRoomState(videoId);
       if (room.hostId === user.id) {
+        this.hostSocketToVideoId.delete(socket.id);
+        room.isLive = false;
+        room.hostId = null;
+        room.pendingHostRequest = null;
+        await this.saveRoomState(videoId, room);
+        this.io.to(videoId).emit('session_ended');
+      }
+    });
+
+    // D. Request to become host (editors only; broadcast so host can see and show "Hand over")
+    socket.on('request_become_host', async (videoId: string) => {
+      const allowed = await this.isEditorForVideo(videoId, user.id);
+      if (!allowed) {
+        socket.emit('error_msg', 'Only editors can request to become host');
+        return;
+      }
+      const room = await this.getRoomState(videoId);
+      if (!room.isLive || room.hostId === null) {
+        socket.emit('error_msg', 'No live session to request');
+        return;
+      }
+      if (room.hostId === user.id) {
+        socket.emit('error_msg', 'You are already the host');
+        return;
+      }
+      room.pendingHostRequest = { userId: user.id, userName: user.name };
+      await this.saveRoomState(videoId, room);
+      this.io.to(videoId).emit('host_requested', { userId: user.id, userName: user.name });
+    });
+
+    // E. Release host (current host only): hand over to pending requester or end session
+    socket.on('release_host', async (videoId: string) => {
+      const room = await this.getRoomState(videoId);
+      if (room.hostId !== user.id) return;
+      this.hostSocketToVideoId.delete(socket.id);
+      if (room.pendingHostRequest) {
+        const { userId: newHostId, userName: newHostName } = room.pendingHostRequest;
+        room.hostId = newHostId;
+        room.hostName = newHostName;
+        room.pendingHostRequest = null;
+        await this.saveRoomState(videoId, room);
+        const sockets = await this.io.in(videoId).fetchSockets();
+        const newHostSocket = sockets.find((s) => (s.data.user as User)?.id === newHostId);
+        if (newHostSocket) this.hostSocketToVideoId.set(newHostSocket.id, videoId);
+        this.io.to(videoId).emit('host_changed', { hostId: room.hostId, hostName: room.hostName });
+      } else {
         room.isLive = false;
         room.hostId = null;
         await this.saveRoomState(videoId, room);
@@ -325,6 +415,19 @@ export class SocketService {
 
     socket.on('drawing_stroke', (data) => {
        socket.to(data.videoId).emit('remote_stroke', data);
+    });
+
+    // Live annotation: ephemeral strokes (no lock, not stored, ~1s client TTL)
+    socket.on('live_annotation_stroke', (data: { videoId: string; points: Array<{ x: number; y: number }>; color: string; width: number }) => {
+      if (!data?.videoId || !Array.isArray(data.points)) return;
+      this.io.to(data.videoId).emit('remote_live_annotation', {
+        videoId: data.videoId,
+        points: data.points,
+        color: data.color ?? '#FF0000',
+        width: data.width ?? 3,
+        userId: user.id,
+        userName: user.name,
+      });
     });
   }
 }

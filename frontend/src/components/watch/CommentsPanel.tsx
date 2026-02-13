@@ -50,6 +50,8 @@ export interface CommentsPanelProps {
   onEndMarker: (label: string) => void;
   onMarkerLabelChange: (label: string) => void;
   markerSaving?: boolean;
+  /** In live mode, only host can add markers; passengers see comments only. Default true (solo behavior). */
+  canAddMarkersInLive?: boolean;
 }
 
 export function CommentsPanel({
@@ -74,6 +76,7 @@ export function CommentsPanel({
   onEndMarker,
   onMarkerLabelChange,
   markerSaving = false,
+  canAddMarkersInLive = true,
 }: CommentsPanelProps): React.ReactElement {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -210,7 +213,7 @@ export function CommentsPanel({
       </div>
       {canEdit && (guestName || !isGuest) && (
         <div className="p-2 border-t border-gray-700 space-y-2">
-          {markerMode ? (
+          {markerMode && canAddMarkersInLive ? (
             <div className="space-y-2">
               <p className="text-xs text-amber-400">
                 {markerMode.segmentStartTime != null
@@ -288,15 +291,17 @@ export function CommentsPanel({
                   Add
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={handleStartMarker}
-                disabled={submitting}
-                className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-amber-400 hover:bg-gray-700"
-              >
-                <MapPin size={14} />
-                Add marker
-              </button>
+              {canAddMarkersInLive && (
+                <button
+                  type="button"
+                  onClick={handleStartMarker}
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-amber-400 hover:bg-gray-700"
+                >
+                  <MapPin size={14} />
+                  Add marker
+                </button>
+              )}
             </>
           )}
         </div>

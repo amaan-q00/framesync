@@ -16,6 +16,7 @@ import { CommentsPanel, type MarkerModeState, type MarkerSegment } from '@/compo
 import { DrawLockBar } from '@/components/watch/DrawLockBar';
 import { DrawingCanvas } from '@/components/watch/DrawingCanvas';
 import { CursorsOverlay } from '@/components/watch/CursorsOverlay';
+import { ActivityBar } from '@/components/watch/ActivityBar';
 
 const SYNC_PULSE_INTERVAL_MS = 500;
 const CURSOR_THROTTLE_MS = 100;
@@ -57,6 +58,10 @@ export default function WatchPage(): React.ReactElement {
   const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
   const pauseAtTimeRef = useRef<number | null>(null);
+  const isPlayingRef = useRef(false);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   const guestSocketEnabled = !isAuthenticated && Boolean(token && id && video);
   const { socket: guestSocket } = useWatchSocket(id, token, guestSocketEnabled);
@@ -71,14 +76,19 @@ export default function WatchPage(): React.ReactElement {
     removeComment,
     claimHost,
     endSession,
+    requestBecomeHost,
+    releaseHost,
     syncPulse,
     requestDrawLock,
     releaseDrawLock,
     emitCursor,
     emitStroke,
+    emitEphemeralStroke,
     remoteCursors,
     remoteStrokes,
+    ephemeralStrokes,
     clearRemoteStrokes,
+    activityEntries,
   } = useWatchRoom(socket, id, fps, {
     userId: user ? Number(user.id) : undefined,
     onError: showError,
@@ -87,6 +97,11 @@ export default function WatchPage(): React.ReactElement {
   const isLiveMode = syncState.isLive;
   const isHost = isAuthenticated && syncState.hostId !== null && user && Number(user.id) === syncState.hostId;
   const isPassenger = isLiveMode && syncState.hasRoomState && !isHost;
+
+  const isHostRef = useRef(false);
+  const isLiveModeRef = useRef(false);
+  isHostRef.current = Boolean(isHost);
+  isLiveModeRef.current = Boolean(isLiveMode);
   const canEdit = video?.role === 'owner' || video?.role === 'editor';
   const iHaveLock = Boolean(
     isLiveMode &&
@@ -152,6 +167,15 @@ export default function WatchPage(): React.ReactElement {
     }
   }, [id]);
 
+  // End live session when host leaves the watch page (e.g. back to dashboard)
+  useEffect(() => {
+    return () => {
+      if (socket && id && isHostRef.current && isLiveModeRef.current) {
+        socket.emit('end_session', id);
+      }
+    };
+  }, [socket, id]);
+
   const handleGuestNameSubmit = useCallback(
     (name: string) => {
       setGuestName(name);
@@ -171,7 +195,8 @@ export default function WatchPage(): React.ReactElement {
       if (now - lastSyncPulseRef.current < SYNC_PULSE_INTERVAL_MS) return;
       lastSyncPulseRef.current = now;
       const frame = Math.round(time * fps);
-      syncPulse({ timestamp: time, state: 'playing', frame });
+      const state = isPlayingRef.current ? 'playing' : 'paused';
+      syncPulse({ timestamp: time, state, frame });
     },
     [isLiveMode, isHost, fps, syncPulse]
   );
@@ -369,6 +394,17 @@ export default function WatchPage(): React.ReactElement {
     [id, video, token, guestName, markerMode?.segments, addComment, showError]
   );
 
+  const handleStroke = useCallback(
+    (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => {
+      if (isLiveMode && !iHaveLock) {
+        emitEphemeralStroke(stroke);
+      } else {
+        emitStroke(stroke);
+      }
+    },
+    [isLiveMode, iHaveLock, emitEphemeralStroke, emitStroke]
+  );
+
   const handleMarkerStroke = useCallback(
     (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => {
       setMarkerMode((m) =>
@@ -382,9 +418,17 @@ export default function WatchPage(): React.ReactElement {
     setMarkerMode((m) => (m ? { ...m, label } : m));
   }, []);
 
-  const handleControlSeek = useCallback((time: number) => {
-    playerRef.current?.seek(time);
-  }, []);
+  const handleControlSeek = useCallback(
+    (time: number) => {
+      playerRef.current?.seek(time);
+      if (isLiveMode && isHost && playerRef.current) {
+        const frame = Math.round(time * fps);
+        const state = isPlayingRef.current ? 'playing' : 'paused';
+        syncPulse({ timestamp: time, state, frame });
+      }
+    },
+    [isLiveMode, isHost, fps, syncPulse]
+  );
 
   const handleControlPlay = useCallback(() => {
     playerRef.current?.play();
@@ -452,18 +496,48 @@ export default function WatchPage(): React.ReactElement {
           {isAuthenticated && (
             <>
               {syncState.isLive && isHost && (
-                <button
-                  type="button"
-                  onClick={endSession}
-                  className="rounded px-2 py-1 text-xs bg-red-600/80 text-white hover:bg-red-500"
-                >
-                  End session
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {syncState.pendingHostRequest ? (
+                    <button
+                      type="button"
+                      onClick={releaseHost}
+                      className="rounded px-2 py-1 text-xs bg-amber-600/80 text-white hover:bg-amber-500"
+                    >
+                      Hand over to {syncState.pendingHostRequest.userName}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={releaseHost}
+                      className="rounded px-2 py-1 text-xs bg-gray-600/80 text-white hover:bg-gray-500"
+                    >
+                      Release host
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={endSession}
+                    className="rounded px-2 py-1 text-xs bg-red-600/80 text-white hover:bg-red-500"
+                  >
+                    End session
+                  </button>
+                </div>
               )}
               {syncState.isLive && !isHost && syncState.hostName && (
-                <span className="text-xs text-gray-400">Live · {syncState.hostName}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Watching live · {syncState.hostName}</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={requestBecomeHost}
+                      className="rounded px-2 py-1 text-xs bg-amber-600/80 text-white hover:bg-amber-500"
+                    >
+                      Request host
+                    </button>
+                  )}
+                </div>
               )}
-              {!syncState.isLive && (
+              {!syncState.isLive && canEdit && (
                 <button
                   type="button"
                   onClick={claimHost}
@@ -472,6 +546,9 @@ export default function WatchPage(): React.ReactElement {
                   Go live
                 </button>
               )}
+              {!syncState.isLive && !canEdit && (
+                <span className="text-xs text-gray-500">Only editors can go live</span>
+              )}
             </>
           )}
         </div>
@@ -479,6 +556,7 @@ export default function WatchPage(): React.ReactElement {
 
       <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-7xl mx-auto">
         <div className="flex-1 flex flex-col gap-2 min-w-0">
+          {isLiveMode && <ActivityBar entries={activityEntries} className="shrink-0" />}
           <div
             ref={playerContainerRef}
             className="relative w-full aspect-video rounded-lg overflow-hidden bg-black"
@@ -511,11 +589,14 @@ export default function WatchPage(): React.ReactElement {
               markerPreviewSegments={markerMode?.segments ?? []}
               strokeColor={strokeColor}
               remoteStrokes={isLiveMode ? remoteStrokes : []}
+              ephemeralStrokes={isLiveMode ? ephemeralStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })) : []}
+              canDrawEphemeral={isLiveMode}
+              isEphemeralStroke={isLiveMode && !iHaveLock}
               shapeComments={shapeComments}
               currentFrame={currentFrame}
               currentTime={currentTime}
               fps={fps}
-              onStroke={emitStroke}
+              onStroke={handleStroke}
               onMarkerStroke={handleMarkerStroke}
               onSaveDrawing={isLiveMode && canEdit ? handleSaveDrawing : undefined}
             />
@@ -535,35 +616,24 @@ export default function WatchPage(): React.ReactElement {
           )}
           <div className="flex items-center gap-3 flex-wrap">
             {isLiveMode && (
-              <>
-                <DrawLockBar
-                  lockedBy={syncState.lockedBy}
-                  currentUserName={user?.name ?? null}
-                  isAuthenticated={isAuthenticated}
-                  onRequestLock={requestDrawLock}
-                  onReleaseLock={releaseDrawLock}
-                />
-                {iHaveLock && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">Pen:</span>
-                    <div className="flex gap-1">
-                      {PEN_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setStrokeColor(color)}
-                          className={`w-6 h-6 rounded-full border-2 hover:border-white focus:outline-none focus:ring-2 focus:ring-white ${
-                            strokeColor === color ? 'border-white ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'border-gray-600'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          title={color}
-                          aria-label={`Set pen color to ${color}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Pen:</span>
+                <div className="flex gap-1">
+                  {PEN_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setStrokeColor(color)}
+                      className={`w-6 h-6 rounded-full border-2 hover:border-white focus:outline-none focus:ring-2 focus:ring-white ${
+                        strokeColor === color ? 'border-white ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'border-gray-600'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={color}
+                      aria-label={`Set pen color to ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
             )}
             {markerMode && canEdit && (
               <div className="flex items-center gap-2">
@@ -602,7 +672,7 @@ export default function WatchPage(): React.ReactElement {
             addComment={addComment}
             removeComment={removeComment}
             onError={showError}
-            onSeekToTimestamp={handleSeekToTimestamp}
+            onSeekToTimestamp={isLiveMode && isPassenger ? undefined : handleSeekToTimestamp}
             markerMode={markerMode}
             onStartMarker={handleStartMarker}
             onStartDraw={handleStartDraw}
@@ -611,6 +681,7 @@ export default function WatchPage(): React.ReactElement {
             onEndMarker={handleEndMarker}
             onMarkerLabelChange={handleMarkerLabelChange}
             markerSaving={markerSaving}
+            canAddMarkersInLive={Boolean(canEdit && (!isLiveMode || isHost))}
           />
         </aside>
       </div>
