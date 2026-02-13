@@ -21,8 +21,10 @@ export interface DrawingCanvasProps {
   /** Comments with type shape or marker to render when in frame range */
   shapeComments: Comment[];
   currentFrame: number;
-  /** Current time in seconds (for multi-segment marker visibility) */
+  /** Current time in seconds (for visibility; drawings stay at least 1s) */
   currentTime: number;
+  /** Video FPS (used to enforce min 1s visibility for legacy comments) */
+  fps: number;
   onStroke: (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => void;
   onMarkerStroke?: (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => void;
   onSaveDrawing?: (strokes: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }>) => void;
@@ -39,6 +41,7 @@ export function DrawingCanvas({
   shapeComments,
   currentFrame,
   currentTime = 0,
+  fps = 24,
   onStroke,
   onMarkerStroke,
   onSaveDrawing,
@@ -122,17 +125,21 @@ export function DrawingCanvas({
       .filter((x): x is { startTime: number; endTime: number; strokes: VectorStroke[] } => x != null);
   };
 
-  // Collect shapes/markers visible at current frame/time; multi-segment markers use currentTime
+  // Visibility: every drawing stays at least 1 second (or its duration if longer)
+  const minDurationSec = 1;
   const visibleShapes = shapeComments.filter((c) => {
     if ((c.type !== 'shape' && c.type !== 'marker') || !c.drawing_data) return false;
     if (isSegmentData(c.drawing_data)) {
       const segments = getSegmentsFromDrawingData(c.drawing_data);
-      return segments.some((seg) => currentTime >= seg.startTime && currentTime <= seg.endTime);
+      return segments.some((seg) => {
+        const end = Math.max(seg.endTime, seg.startTime + minDurationSec);
+        return currentTime >= seg.startTime && currentTime <= end;
+      });
     }
-    const start = c.frame_number;
-    const durationFrames = c.duration_frames ?? 0;
-    const end = start + (durationFrames > 0 ? durationFrames : 1);
-    return currentFrame >= start && currentFrame <= end;
+    const start = c.timestamp;
+    const durationSec = Math.max(((c.duration_frames ?? 0) / fps) || 0, minDurationSec);
+    const end = start + durationSec;
+    return currentTime >= start && currentTime <= end;
   });
 
   const strokesFromComment = (c: Comment): VectorStroke[] => {
@@ -141,15 +148,19 @@ export function DrawingCanvas({
     if (isSegmentData(d)) {
       const segments = getSegmentsFromDrawingData(d);
       return segments
-        .filter((seg) => currentTime >= seg.startTime && currentTime <= seg.endTime)
+        .filter((seg) => {
+          const end = Math.max(seg.endTime, seg.startTime + minDurationSec);
+          return currentTime >= seg.startTime && currentTime <= end;
+        })
         .flatMap((seg) => seg.strokes);
     }
     return (d as VectorStroke[]);
   };
 
-  const previewStrokes = markerPreviewSegments.filter(
-    (seg) => currentTime >= seg.startTime && currentTime <= seg.endTime
-  ).flatMap((seg) => seg.strokes);
+  const previewStrokes = markerPreviewSegments.filter((seg) => {
+    const end = Math.max(seg.endTime, seg.startTime + minDurationSec);
+    return currentTime >= seg.startTime && currentTime <= end;
+  }).flatMap((seg) => seg.strokes);
 
   const allStrokesToDraw = [
     ...visibleShapes.flatMap(strokesFromComment),

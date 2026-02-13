@@ -46,6 +46,7 @@ export interface CommentsPanelProps {
   onStartMarker: () => void;
   onStartDraw: () => void;
   onDoneDrawing: () => void;
+  onCancelDrawing?: () => void;
   onEndMarker: (label: string) => void;
   onMarkerLabelChange: (label: string) => void;
   markerSaving?: boolean;
@@ -69,6 +70,7 @@ export function CommentsPanel({
   onStartMarker,
   onStartDraw,
   onDoneDrawing,
+  onCancelDrawing,
   onEndMarker,
   onMarkerLabelChange,
   markerSaving = false,
@@ -225,13 +227,25 @@ export function CommentsPanel({
                   Draw
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={onDoneDrawing}
-                  className="w-full rounded px-2 py-1.5 text-sm bg-green-600 text-white hover:bg-green-500 flex items-center justify-center gap-1.5"
-                >
-                  Done drawing
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={onDoneDrawing}
+                    className="flex-1 rounded px-2 py-1.5 text-sm bg-green-600 text-white hover:bg-green-500 flex items-center justify-center gap-1.5"
+                  >
+                    Done drawing
+                  </button>
+                  {onCancelDrawing && (
+                    <button
+                      type="button"
+                      onClick={onCancelDrawing}
+                      className="rounded px-2 py-1.5 text-sm bg-gray-600 text-white hover:bg-gray-500 flex items-center justify-center"
+                      title="Cancel current drawing (discard this segment)"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               )}
               {markerMode.segments.length > 0 && (
                 <p className="text-xs text-gray-400">{markerMode.segments.length} segment(s)</p>
@@ -246,8 +260,9 @@ export function CommentsPanel({
               <button
                 type="button"
                 onClick={handleEndMarker}
-                disabled={submitting || markerSaving}
+                disabled={submitting || markerSaving || markerMode.segmentStartTime != null}
                 className="w-full rounded px-2 py-1.5 text-sm bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                title={markerMode.segmentStartTime != null ? 'Finish or cancel current drawing first' : undefined}
               >
                 <MapPin size={14} />
                 End marker

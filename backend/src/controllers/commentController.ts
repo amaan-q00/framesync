@@ -75,11 +75,15 @@ export const addComment = async (
 
     const fps = videoMeta.rows[0].fps || 24.0;
 
-    // 4. Calculate Frame Data
+    // 4. Calculate Frame Data (markers/shapes: at least 1 second visibility)
     const frameNumber = Math.round(parseFloat(timestamp) * fps);
-    const durationFrames = duration
+    let durationFrames = duration
       ? Math.round(parseFloat(duration) * fps)
       : 0;
+    if (type === "marker" || type === "shape") {
+      const minFrames = Math.max(1, Math.round(fps));
+      durationFrames = Math.max(durationFrames, minFrames);
+    }
 
     // 5. Normalize drawing_data for JSONB: array of strokes (legacy) or { segments: [{ startTime, endTime, strokes }] }
     let drawingDataForDb: string | null = null;

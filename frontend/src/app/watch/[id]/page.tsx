@@ -301,6 +301,17 @@ export default function WatchPage(): React.ReactElement {
     setIsPlaying(true);
   }, [markerMode]);
 
+  const handleCancelDrawing = useCallback(() => {
+    const player = playerRef.current;
+    setMarkerMode((m) =>
+      m && m.segmentStartTime != null
+        ? { ...m, segmentStartTime: undefined, segmentStrokes: [] }
+        : m
+    );
+    player?.play();
+    setIsPlaying(true);
+  }, []);
+
   const handleEndMarker = useCallback(
     async (label: string) => {
       if (!video) return;
@@ -326,7 +337,7 @@ export default function WatchPage(): React.ReactElement {
         } else {
           const minStart = Math.min(...segments.map((s) => s.startTime));
           const maxEnd = Math.max(...segments.map((s) => s.endTime));
-          const duration = Math.max(maxEnd - minStart, 0.5);
+          const duration = Math.max(maxEnd - minStart, 1);
           const drawingPayload = {
             segments: segments.map((seg) => ({
               startTime: seg.startTime,
@@ -396,7 +407,7 @@ export default function WatchPage(): React.ReactElement {
             type: 'shape',
             timestamp,
             drawing_data: strokes,
-            duration: 0,
+            duration: 1,
             ...(token && guestName && { guestName }),
           },
           token
@@ -503,6 +514,7 @@ export default function WatchPage(): React.ReactElement {
               shapeComments={shapeComments}
               currentFrame={currentFrame}
               currentTime={currentTime}
+              fps={fps}
               onStroke={emitStroke}
               onMarkerStroke={handleMarkerStroke}
               onSaveDrawing={isLiveMode && canEdit ? handleSaveDrawing : undefined}
@@ -595,6 +607,7 @@ export default function WatchPage(): React.ReactElement {
             onStartMarker={handleStartMarker}
             onStartDraw={handleStartDraw}
             onDoneDrawing={handleDoneDrawing}
+            onCancelDrawing={handleCancelDrawing}
             onEndMarker={handleEndMarker}
             onMarkerLabelChange={handleMarkerLabelChange}
             markerSaving={markerSaving}
