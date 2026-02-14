@@ -1,17 +1,19 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import AppLink from '@/components/ui/AppLink';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
-import { profileApi } from '@/lib/api';
+import { authApi, profileApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { User, Camera } from 'lucide-react';
+import { User, Camera, AlertTriangle } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, updateUser } = useAuth();
+  const router = useRouter();
+  const { user, updateUser, logout } = useAuth();
   const { success, error } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -19,6 +21,9 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setName(e.target.value);
@@ -87,6 +92,26 @@ export default function SettingsPage() {
       error(getErrorMessage(err) || 'Profile update failed');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = deleteConfirmEmail.trim();
+    if (!trimmed) {
+      error('Please enter your email to confirm');
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await authApi.deleteMe(trimmed);
+      success('Account deleted');
+      await logout();
+      router.replace('/');
+    } catch (err: unknown) {
+      error(getErrorMessage(err) || 'Failed to delete account');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -204,7 +229,63 @@ export default function SettingsPage() {
             </div>
           </form>
         </div>
+
+        {/* Danger zone: Delete account */}
+        <div className="mt-8 bg-white shadow rounded-lg p-6 border border-red-200">
+          <h2 className="text-lg font-semibold text-red-700 mb-2 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" />
+            Danger zone
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Permanently delete your account and all your videos and data. This cannot be undone.
+          </p>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => setShowDeleteModal(true)}
+            disabled={isDeleting}
+          >
+            Delete account
+          </Button>
+        </div>
       </main>
+
+      {/* Delete account modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog" aria-labelledby="delete-title">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 id="delete-title" className="text-lg font-semibold text-gray-900 mb-2">Delete account</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Type your account email below to confirm. All your data will be permanently deleted.
+            </p>
+            <form onSubmit={handleDeleteAccount} className="space-y-4">
+              <Input
+                label="Your email"
+                type="email"
+                value={deleteConfirmEmail}
+                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                placeholder={user?.email || 'Enter your email'}
+                disabled={isDeleting}
+                autoComplete="email"
+                className="bg-white text-gray-900 placeholder:text-gray-500"
+              />
+              <div className="flex justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => { setShowDeleteModal(false); setDeleteConfirmEmail(''); }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="destructive" disabled={isDeleting} isLoading={isDeleting}>
+                  Delete account
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

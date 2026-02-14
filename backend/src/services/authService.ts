@@ -5,10 +5,15 @@ import { env } from '../config/env';
 import { AppError } from '../utils/appError';
 import { User, SafeUser } from '../types';
 import { RegisterInput, LoginInput } from '../schemas/auth.schema';
+import { isDisposableEmail } from '../utils/emailValidation';
 
 export class AuthService {
   static async register(input: RegisterInput): Promise<{ user: SafeUser; token: string }> {
     const { email, password, name } = input;
+
+    if (isDisposableEmail(email)) {
+      throw new AppError('Please use a permanent email address. Disposable or temporary email addresses are not allowed.', 400);
+    }
 
     // Check for duplicate email
     const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);

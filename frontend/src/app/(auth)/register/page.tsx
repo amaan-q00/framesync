@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLink from '@/components/ui/AppLink';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import GoogleButton from '@/components/auth/GoogleButton';
@@ -18,10 +19,10 @@ export default function RegisterPage() {
   });
   const [errors, setErrors] = useState<Partial<RegisterCredentials>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { register, googleLogin } = useAuth();
+  const { register } = useAuth();
   const router = useRouter();
+  const { error } = useToast();
 
   const validateForm = (): boolean => {
     const newErrors: Partial<RegisterCredentials> = {};
@@ -62,19 +63,6 @@ export default function RegisterPage() {
       setErrors({ email: msg, password: msg });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    try {
-      // TODO: Implement Google OAuth flow
-      // For now, we'll show a message that it's disabled
-      alert('Google login will be available soon. Please use email/password for now.');
-    } catch (err: unknown) {
-      console.error('Google login error:', err);
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -161,11 +149,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <GoogleButton
-              onClick={handleGoogleLogin}
-              disabled={true} // Disabled as requested
-              isLoading={googleLoading}
-            />
+            <GoogleButton disabled={isLoading} />
           </div>
         </form>
       </div>

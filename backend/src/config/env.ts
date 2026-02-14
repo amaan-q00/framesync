@@ -16,7 +16,10 @@ export const env = cleanEnv(process.env, {
   S3_BUCKET: str({ default: 'videos' }),
   S3_REGION: str({ default: 'us-east-1' }),
   VIDEO_RETENTION_HOURS: str({ default: '24' }),
-  GOOGLE_CLIENT_ID: str({default: 'my_id'}),
+  GOOGLE_CLIENT_ID: str({ default: '' }),
+  GOOGLE_CLIENT_SECRET: str({ default: '' }),
+  /** Public URL of this API (for OAuth redirect_uri). e.g. http://localhost:8000 */
+  BACKEND_PUBLIC_URL: url({ default: 'http://localhost:8000' }),
   // Cookie configuration
   COOKIE_SECURE: str({ choices: ['true', 'false'], default: 'false' }),
   COOKIE_HTTPONLY: str({ choices: ['true', 'false'], default: 'true' }),

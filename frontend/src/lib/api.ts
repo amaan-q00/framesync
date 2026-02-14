@@ -102,6 +102,13 @@ export const authApi = {
       method: 'POST',
     });
   },
+
+  deleteMe: async (confirmEmail: string): Promise<{ status: string; message: string }> => {
+    return apiRequest('/auth/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmEmail }),
+    });
+  },
 };
 
 export const profileApi = {

@@ -18,11 +18,10 @@ export default function LoginPage() {
   });
   const [errors, setErrors] = useState<Partial<LoginCredentials>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { login, googleLogin } = useAuth();
+  const { login } = useAuth();
   const router = useRouter();
-  const { success, error, warning } = useToast();
+  const { success, error } = useToast();
 
   const validateForm = (): boolean => {
     const newErrors: Partial<LoginCredentials> = {};
@@ -57,20 +56,6 @@ export default function LoginPage() {
       setErrors({ email: msg, password: msg });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    try {
-      // TODO: Implement Google OAuth flow
-      // For now, we'll show a message that it's disabled
-      warning('Google login will be available soon. Please use email/password for now.');
-    } catch (err: unknown) {
-      error('Google login failed');
-      console.error('Google login error:', err);
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -145,11 +130,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <GoogleButton
-              onClick={handleGoogleLogin}
-              disabled={true} // Disabled as requested
-              isLoading={googleLoading}
-            />
+            <GoogleButton disabled={isLoading} />
           </div>
         </form>
       </div>
