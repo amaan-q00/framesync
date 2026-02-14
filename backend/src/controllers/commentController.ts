@@ -4,38 +4,50 @@ import { AppError } from "../utils/appError";
 import { AuthRequest } from "../middleware/auth";
 import { SocketService } from "../services/socketService";
 
-// Helper: Reuse the access check logic
-const canComment = async (videoId: string, userId?: number, token?: string) => {
+// Permission helper: same access logic as checkVideoAccess (owner, team, public).
+// canAddComment: anyone with access; canAddMarkers: owner or editor only (not viewers).
+const getCommentPermissions = async (
+  videoId: string,
+  userId?: number,
+  token?: string
+): Promise<{ canAddComment: boolean; canAddMarkers: boolean }> => {
   const videoRes = await pool.query(
     "SELECT user_id, is_public, public_token, public_role FROM videos WHERE id = $1",
     [videoId],
   );
-  if (videoRes.rowCount === 0) return false;
+  if (videoRes.rowCount === 0) return { canAddComment: false, canAddMarkers: false };
   const video = videoRes.rows[0];
 
   // 1. Owner
-  if (userId && video.user_id === userId) return true;
+  if (userId && video.user_id === userId) {
+    return { canAddComment: true, canAddMarkers: true };
+  }
 
-  // 2. Team Editor
+  // 2. Team (editor or viewer)
   if (userId) {
     const shareRes = await pool.query(
       "SELECT role FROM video_shares WHERE video_id = $1 AND user_id = $2",
       [videoId, userId],
     );
-    if ((shareRes.rowCount || 0) > 0 && shareRes.rows[0].role === "editor")
-      return true;
+    if ((shareRes.rowCount || 0) > 0) {
+      const role = shareRes.rows[0].role as string;
+      return {
+        canAddComment: true,
+        canAddMarkers: role === "editor",
+      };
+    }
   }
 
-  // 3. Public Editor
-  if (
-    video.is_public &&
-    video.public_token === token &&
-    video.public_role === "editor"
-  ) {
-    return true;
+  // 3. Public (editor or viewer via token)
+  if (video.is_public && video.public_token === token) {
+    const role = (video.public_role as string) || "viewer";
+    return {
+      canAddComment: true,
+      canAddMarkers: role === "editor",
+    };
   }
 
-  return false;
+  return { canAddComment: false, canAddMarkers: false };
 };
 
 // POST /api/videos/:id/comments
@@ -50,12 +62,28 @@ export const addComment = async (
   const { token } = req.query as { token?: string };
 
   try {
-    // 1. Check Permissions
-    const allowed = await canComment(id, req.user?.userId, token);
-    if (!allowed) {
+    // 1. Check Permissions (anyone with access can add comment; only editor/owner can add markers)
+    const { canAddComment, canAddMarkers } = await getCommentPermissions(
+      id,
+      req.user?.userId,
+      token,
+    );
+    if (!canAddComment) {
       return next(
         new AppError(
           "Permission denied: You cannot comment on this video",
+          403,
+        ),
+      );
+    }
+    const commentType = type || "text";
+    if (
+      (commentType === "marker" || commentType === "shape") &&
+      !canAddMarkers
+    ) {
+      return next(
+        new AppError(
+          "Permission denied: Only editors can add markers or shapes",
           403,
         ),
       );
@@ -122,7 +150,7 @@ export const addComment = async (
         timestamp,
         frameNumber, // The Source of Truth
         durationFrames,
-        type || "text",
+        commentType,
         drawingDataForDb,
         color || "#FF0000",
       ],
@@ -184,7 +212,7 @@ export const getComments = async (
        FROM comments c
        LEFT JOIN users u ON c.user_id = u.id
        WHERE c.video_id = $1 
-       ORDER BY c.frame_number ASC`,
+       ORDER BY c.created_at ASC`,
       [id],
     );
     res.status(200).json({ status: "success", data: result.rows });
@@ -200,10 +228,11 @@ export const deleteComment = async (
   next: NextFunction,
 ) => {
   const { id, commentId } = req.params as { id: string; commentId: string };
+  const guestName = (req.body?.guestName ?? req.query?.guestName) as string | undefined;
 
   try {
     const check = await pool.query(
-      `SELECT c.user_id as author_id, v.user_id as owner_id 
+      `SELECT c.user_id as author_id, c.guest_name as author_guest_name, v.user_id as owner_id 
        FROM comments c 
        JOIN videos v ON c.video_id = v.id 
        WHERE c.id = $1 AND c.video_id = $2`,
@@ -213,10 +242,17 @@ export const deleteComment = async (
     if (check.rowCount === 0)
       return next(new AppError("Comment not found", 404));
 
-    const { author_id, owner_id } = check.rows[0];
+    const { author_id, author_guest_name, owner_id } = check.rows[0];
     const currentUserId = req.user?.userId;
 
-    if (currentUserId !== owner_id && currentUserId !== author_id) {
+    // Owner can delete any comment
+    if (currentUserId !== undefined && currentUserId === owner_id) {
+      // allowed
+    } else if (author_id != null && currentUserId === author_id) {
+      // Non-owner: can delete own (logged-in author)
+    } else if (author_id == null && author_guest_name != null && guestName != null && author_guest_name === guestName) {
+      // Guest: can delete own comment by matching guest_name
+    } else {
       return next(new AppError("You can only delete your own comments", 403));
     }
 

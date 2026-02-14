@@ -103,7 +103,9 @@ export function useWatchRoom(
   const addComment = useCallback((comment: Comment) => {
     setComments((prev) => {
       if (prev.some((c) => c.id === comment.id)) return prev;
-      return [...prev, comment].sort((a, b) => a.frame_number - b.frame_number);
+      return [...prev, comment].sort(
+        (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+      );
     });
   }, []);
 

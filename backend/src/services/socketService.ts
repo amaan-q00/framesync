@@ -21,11 +21,16 @@ function parseCookieHeader(cookieHeader: string | undefined): Record<string, str
 
 export interface GuestAccess {
   videoId: string;
+  publicToken?: string;
+  isEditor?: boolean;
 }
+
+// Sentinel hostId when the host is a guest (public editor)
+const GUEST_HOST_ID = -1;
 
 // Strict interface for Room State stored in Redis
 interface RoomState {
-  hostId: number | null;
+  hostId: number | null; // userId or GUEST_HOST_ID for guest host
   hostName: string | null;
   isLive: boolean;
   
@@ -148,12 +153,17 @@ export class SocketService {
       if (publicToken && videoId) {
         try {
           const row = await pool.query(
-            'SELECT id FROM videos WHERE id = $1 AND is_public = true AND public_token = $2',
+            'SELECT id, public_role FROM videos WHERE id = $1 AND is_public = true AND public_token = $2',
             [videoId, publicToken]
           );
           if (row.rowCount && row.rowCount > 0) {
+            const publicRole = (row.rows[0] as { public_role?: string }).public_role;
             socket.data.user = undefined;
-            socket.data.guestAccess = { videoId };
+            socket.data.guestAccess = {
+              videoId,
+              publicToken,
+              isEditor: publicRole === 'editor',
+            };
             return next();
           }
         } catch {
@@ -179,6 +189,8 @@ export class SocketService {
         this.handleSyncLogic(socket);
         this.handleLockLogic(socket);
         this.handleEphemeral(socket);
+      } else if (guestAccess?.isEditor) {
+        this.handleSyncLogicForGuest(socket);
       }
 
       socket.on('disconnect', () => this.handleHostDisconnect(socket));
@@ -190,7 +202,7 @@ export class SocketService {
     this.hostSocketToVideoId.delete(socket.id);
     if (!videoId) return;
     const room = await this.getRoomState(videoId);
-    if (!room.isLive || room.hostId === null) return;
+    if (!room.isLive) return;
     room.isLive = false;
     room.hostId = null;
     room.hostName = null;
@@ -349,6 +361,66 @@ export class SocketService {
         await this.saveRoomState(videoId, room);
         this.io.to(videoId).emit('session_ended');
       }
+    });
+  }
+
+  /** Sync logic for guest public editor: claim host (hostId = GUEST_HOST_ID), sync_pulse, end_session, release_host. */
+  private handleSyncLogicForGuest(socket: Socket) {
+    const guestAccess = socket.data.guestAccess as GuestAccess;
+
+    socket.on('claim_host', async (payload: string | { videoId: string; hostName?: string }) => {
+      const videoId = typeof payload === 'string' ? payload : payload?.videoId;
+      const hostName = typeof payload === 'object' && payload?.hostName ? payload.hostName : 'Public editor';
+      if (!videoId || guestAccess.videoId !== videoId || !guestAccess.isEditor) {
+        socket.emit('error_msg', 'Only editors can go live');
+        return;
+      }
+      const room = await this.getRoomState(videoId);
+      room.hostId = GUEST_HOST_ID;
+      room.hostName = hostName;
+      room.isLive = true;
+      room.lastStatus = 'paused';
+      await this.saveRoomState(videoId, room);
+      this.hostSocketToVideoId.set(socket.id, videoId);
+      this.io.to(videoId).emit('host_changed', { hostId: GUEST_HOST_ID, hostName: room.hostName });
+      socket.emit('you_are_host');
+    });
+
+    socket.on('sync_pulse', async ({ videoId, timestamp, state, frame }: { videoId: string; timestamp: number; state: 'playing' | 'paused'; frame: number }) => {
+      if (guestAccess.videoId !== videoId) return;
+      const room = await this.getRoomState(videoId);
+      if (!room.isLive || room.hostId !== GUEST_HOST_ID || this.hostSocketToVideoId.get(socket.id) !== videoId) return;
+      room.lastTimestamp = timestamp;
+      room.lastStatus = state;
+      room.lastHeartbeatAt = Date.now();
+      this.saveRoomState(videoId, room).catch(console.error);
+      socket.to(videoId).emit('sync_update', { timestamp, frame, state, driftAllowance: 0.5 });
+    });
+
+    socket.on('end_session', async (videoId: string) => {
+      if (guestAccess.videoId !== videoId) return;
+      if (this.hostSocketToVideoId.get(socket.id) !== videoId) return;
+      this.hostSocketToVideoId.delete(socket.id);
+      const room = await this.getRoomState(videoId);
+      room.isLive = false;
+      room.hostId = null;
+      room.hostName = null;
+      room.pendingHostRequest = null;
+      await this.saveRoomState(videoId, room);
+      this.io.to(videoId).emit('session_ended');
+    });
+
+    socket.on('release_host', async (videoId: string) => {
+      if (guestAccess.videoId !== videoId) return;
+      if (this.hostSocketToVideoId.get(socket.id) !== videoId) return;
+      this.hostSocketToVideoId.delete(socket.id);
+      const room = await this.getRoomState(videoId);
+      room.isLive = false;
+      room.hostId = null;
+      room.hostName = null;
+      room.pendingHostRequest = null;
+      await this.saveRoomState(videoId, room);
+      this.io.to(videoId).emit('session_ended');
     });
   }
 

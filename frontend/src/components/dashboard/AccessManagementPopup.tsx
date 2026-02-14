@@ -38,6 +38,7 @@ export function AccessManagementPopup({
   const [publicTokenLocal, setPublicTokenLocal] = useState<string | null>(publicToken ?? null);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<number | null>(null);
+  const [updatingRoleUserId, setUpdatingRoleUserId] = useState<number | null>(null);
 
   const loadShares = useCallback(async () => {
     try {
@@ -114,6 +115,20 @@ export function AccessManagementPopup({
     }
   };
 
+  const handleUpdateShareRole = async (userId: number, email: string, newRole: 'viewer' | 'editor') => {
+    setUpdatingRoleUserId(userId);
+    try {
+      await videoApi.shareVideo(videoId, { email: email.trim().toLowerCase(), role: newRole });
+      success('Role updated');
+      await loadShares();
+      onUpdated?.();
+    } catch (err) {
+      showError(getErrorMessage(err));
+    } finally {
+      setUpdatingRoleUserId(null);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
@@ -185,23 +200,33 @@ export function AccessManagementPopup({
                 {shares.map((s) => (
                   <li
                     key={s.user_id}
-                    className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <span className="font-medium text-gray-900">{s.email}</span>
                       {s.name && s.name !== s.email && (
                         <span className="ml-2 text-gray-500">({s.name})</span>
                       )}
-                      <span className="ml-2 text-gray-500 capitalize">{s.role}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveShare(s.user_id)}
-                      disabled={removingUserId === s.user_id}
-                      className="text-red-600 hover:text-red-800 text-xs font-medium"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={s.role}
+                        onChange={(e) => handleUpdateShareRole(s.user_id, s.email, e.target.value as 'viewer' | 'editor')}
+                        disabled={updatingRoleUserId === s.user_id}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-white [&_option]:text-gray-900"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveShare(s.user_id)}
+                        disabled={removingUserId === s.user_id}
+                        className="text-red-600 hover:text-red-800 text-xs font-medium"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -237,7 +262,9 @@ export function AccessManagementPopup({
                         if (!publicEnabled) return;
                         setTogglingPublic(true);
                         try {
-                          await videoApi.setPublicAccess(videoId, { enabled: true, role });
+                          const res = await videoApi.setPublicAccess(videoId, { enabled: true, role });
+                          setPublicTokenLocal(res.data.public_token ?? null);
+                          setPublicRoleLocal(res.data.public_role);
                           onUpdated?.();
                         } catch (err) {
                           showError(getErrorMessage(err));

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardSync } from '@/contexts/DashboardSyncContext';
@@ -35,6 +35,7 @@ const PEN_COLORS = [
 export default function WatchPage(): React.ReactElement {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const id = typeof params?.id === 'string' ? params.id : '';
   const token = searchParams?.get('token') ?? undefined;
   const { isAuthenticated, user } = useAuth();
@@ -45,7 +46,9 @@ export default function WatchPage(): React.ReactElement {
     manifestUrl?: string;
     role: string;
     fps: number;
+    isPublicAccess?: boolean;
   } | null>(null);
+  const [guestIsHost, setGuestIsHost] = useState(false);
   const [loading, setLoading] = useState(!!id);
   const [guestName, setGuestName] = useState('');
   const [strokeColor, setStrokeColor] = useState('#FF0000');
@@ -95,14 +98,38 @@ export default function WatchPage(): React.ReactElement {
   });
 
   const isLiveMode = syncState.isLive;
-  const isHost = isAuthenticated && syncState.hostId !== null && user && Number(user.id) === syncState.hostId;
-  const isPassenger = isLiveMode && syncState.hasRoomState && !isHost;
+  const isHost =
+    (isAuthenticated && syncState.hostId !== null && user && Number(user.id) === syncState.hostId) || guestIsHost;
+  const [userHasJoinedLive, setUserHasJoinedLive] = useState(false);
+  const isPassenger = isLiveMode && userHasJoinedLive && syncState.hasRoomState && !isHost;
+  /** In live session and either host or joined as viewer (so they can draw/see ephemeral, cursors, etc.) */
+  const isInLiveSession = isLiveMode && (isHost || userHasJoinedLive);
+
+  useEffect(() => {
+    if (!syncState.isLive) setUserHasJoinedLive(false);
+  }, [syncState.isLive]);
+
+  useEffect(() => {
+    if (!syncState.isLive) setGuestIsHost(false);
+  }, [syncState.isLive]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onYouAreHost = () => setGuestIsHost(true);
+    socket.on('you_are_host', onYouAreHost);
+    return () => {
+      socket.off('you_are_host', onYouAreHost);
+    };
+  }, [socket]);
 
   const isHostRef = useRef(false);
   const isLiveModeRef = useRef(false);
   isHostRef.current = Boolean(isHost);
   isLiveModeRef.current = Boolean(isLiveMode);
   const canEdit = video?.role === 'owner' || video?.role === 'editor';
+  const canAddComment = Boolean(video);
+  const canAddMarkers = (video?.role === 'owner' || video?.role === 'editor') && (!isLiveMode || isHost);
+  const canDoEphemeral = isInLiveSession && !video?.isPublicAccess;
   const iHaveLock = Boolean(
     isLiveMode &&
       isAuthenticated &&
@@ -129,6 +156,7 @@ export default function WatchPage(): React.ReactElement {
             manifestUrl: res.data.manifestUrl,
             role: res.data.role,
             fps: typeof res.data.fps === 'number' ? res.data.fps : 24,
+            isPublicAccess: Boolean(res.data.isPublicAccess),
           });
         }
       })
@@ -142,6 +170,46 @@ export default function WatchPage(): React.ReactElement {
       cancelled = true;
     };
   }, [id, token, showError]);
+
+  // When permission changes (access revoked or role changed), push user to dashboard
+  const videoRoleRef = useRef<string | null>(null);
+  if (video?.role) videoRoleRef.current = video.role;
+
+  const checkPermissionAndRedirect = useCallback(() => {
+    if (!id) return;
+    videoApi
+      .getVideo(id, token)
+      .then((res) => {
+        const newRole = res.data.role as string;
+        const prevRole = videoRoleRef.current;
+        videoRoleRef.current = newRole;
+        if (prevRole != null && newRole !== prevRole) {
+          router.replace('/dashboard');
+        }
+      })
+      .catch((err: unknown) => {
+        const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
+        if (status === 403) {
+          router.replace('/dashboard');
+        }
+      });
+  }, [id, token, router]);
+
+  useEffect(() => {
+    if (!id) return;
+    const POLL_MS = 20000;
+    const immediate = setTimeout(() => checkPermissionAndRedirect(), 3000);
+    const interval = setInterval(checkPermissionAndRedirect, POLL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkPermissionAndRedirect();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearTimeout(immediate);
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [id, checkPermissionAndRedirect]);
 
   useEffect(() => {
     if (!id || !video) return;
@@ -220,7 +288,7 @@ export default function WatchPage(): React.ReactElement {
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!isLiveMode || !isAuthenticated || !playerContainerRef.current) return;
+      if (!isInLiveSession || !canDoEphemeral || !playerContainerRef.current) return;
       const rect = playerContainerRef.current.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = (e.clientY - rect.top) / rect.height;
@@ -232,7 +300,7 @@ export default function WatchPage(): React.ReactElement {
         if (lastCursorRef.current) emitCursor(lastCursorRef.current.x, lastCursorRef.current.y);
       }, CURSOR_THROTTLE_MS);
     },
-    [isLiveMode, isAuthenticated, emitCursor]
+    [isInLiveSession, canDoEphemeral, emitCursor]
   );
 
   useEffect(() => {
@@ -396,13 +464,13 @@ export default function WatchPage(): React.ReactElement {
 
   const handleStroke = useCallback(
     (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => {
-      if (isLiveMode && !iHaveLock) {
+      if (isLiveMode && !iHaveLock && canDoEphemeral) {
         emitEphemeralStroke(stroke);
       } else {
         emitStroke(stroke);
       }
     },
-    [isLiveMode, iHaveLock, emitEphemeralStroke, emitStroke]
+    [isLiveMode, iHaveLock, canDoEphemeral, emitEphemeralStroke, emitStroke]
   );
 
   const handleMarkerStroke = useCallback(
@@ -493,7 +561,7 @@ export default function WatchPage(): React.ReactElement {
         <h1 className="truncate text-lg font-medium text-white max-w-md">{video.title}</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-500 capitalize">{video.role}</span>
-          {isAuthenticated && (
+          {(isAuthenticated || video?.isPublicAccess) && (
             <>
               {syncState.isLive && isHost && (
                 <div className="flex items-center gap-2 flex-wrap">
@@ -523,9 +591,25 @@ export default function WatchPage(): React.ReactElement {
                   </button>
                 </div>
               )}
-              {syncState.isLive && !isHost && syncState.hostName && (
-                <div className="flex items-center gap-2">
+              {syncState.isLive && !isHost && syncState.hostName && !userHasJoinedLive && (
+                <button
+                  type="button"
+                  onClick={() => setUserHasJoinedLive(true)}
+                  className="rounded px-2 py-1 text-xs bg-green-600 text-white hover:bg-green-500"
+                >
+                  Join live · {syncState.hostName}
+                </button>
+              )}
+              {syncState.isLive && !isHost && syncState.hostName && userHasJoinedLive && (
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-gray-400">Watching live · {syncState.hostName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setUserHasJoinedLive(false)}
+                    className="rounded px-2 py-1 text-xs bg-gray-600 text-white hover:bg-gray-500"
+                  >
+                    Leave live
+                  </button>
                   {canEdit && (
                     <button
                       type="button"
@@ -556,7 +640,7 @@ export default function WatchPage(): React.ReactElement {
 
       <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-7xl mx-auto">
         <div className="flex-1 flex flex-col gap-2 min-w-0">
-          {isLiveMode && <ActivityBar entries={activityEntries} className="shrink-0" />}
+          {isInLiveSession && <ActivityBar entries={activityEntries} className="shrink-0" />}
           <div
             ref={playerContainerRef}
             className="relative w-full aspect-video rounded-lg overflow-hidden bg-black"
@@ -588,10 +672,10 @@ export default function WatchPage(): React.ReactElement {
               markerStrokes={markerMode?.segmentStrokes ?? []}
               markerPreviewSegments={markerMode?.segments ?? []}
               strokeColor={strokeColor}
-              remoteStrokes={isLiveMode ? remoteStrokes : []}
-              ephemeralStrokes={isLiveMode ? ephemeralStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })) : []}
-              canDrawEphemeral={isLiveMode}
-              isEphemeralStroke={isLiveMode && !iHaveLock}
+              remoteStrokes={canDoEphemeral ? remoteStrokes : []}
+              ephemeralStrokes={canDoEphemeral ? ephemeralStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })) : []}
+              canDrawEphemeral={canDoEphemeral}
+              isEphemeralStroke={isLiveMode && !iHaveLock && canDoEphemeral}
               shapeComments={shapeComments}
               currentFrame={currentFrame}
               currentTime={currentTime}
@@ -600,7 +684,7 @@ export default function WatchPage(): React.ReactElement {
               onMarkerStroke={handleMarkerStroke}
               onSaveDrawing={isLiveMode && canEdit ? handleSaveDrawing : undefined}
             />
-            {isLiveMode && <CursorsOverlay cursors={remoteCursors} />}
+            {canDoEphemeral && <CursorsOverlay cursors={remoteCursors} />}
           </div>
           {video.manifestUrl && (
             <VideoControlBar
@@ -615,7 +699,7 @@ export default function WatchPage(): React.ReactElement {
             />
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            {isLiveMode && (
+            {canDoEphemeral && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">Pen:</span>
                 <div className="flex gap-1">
@@ -665,7 +749,10 @@ export default function WatchPage(): React.ReactElement {
             role={video.role}
             comments={comments}
             currentTime={currentTime}
-            canEdit={canEdit}
+            canAddComment={canAddComment}
+            canDeleteAny={video.role === 'owner'}
+            canDeleteOwn={true}
+            currentUserId={user ? Number(user.id) : undefined}
             isGuest={!isAuthenticated}
             guestName={guestName}
             onGuestNameSubmit={handleGuestNameSubmit}
@@ -681,7 +768,7 @@ export default function WatchPage(): React.ReactElement {
             onEndMarker={handleEndMarker}
             onMarkerLabelChange={handleMarkerLabelChange}
             markerSaving={markerSaving}
-            canAddMarkersInLive={Boolean(canEdit && (!isLiveMode || isHost))}
+            canAddMarkersInLive={canAddMarkers}
           />
         </aside>
       </div>

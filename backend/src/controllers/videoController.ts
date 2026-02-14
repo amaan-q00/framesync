@@ -28,12 +28,12 @@ const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: 
     [videoId]
   );
   
-  if (videoResult.rowCount === 0) return { access: false, role: null, video: null };
+  if (videoResult.rowCount === 0) return { access: false, role: null, video: null, isPublicAccess: false };
   const video = videoResult.rows[0];
 
   // 2. Case A: Owner (Full Access)
   if (userId && video.user_id === userId) {
-    return { access: true, role: 'owner', video };
+    return { access: true, role: 'owner', video, isPublicAccess: false };
   }
 
   // 3. Case B: Team Member (Editor/Viewer)
@@ -43,17 +43,16 @@ const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: 
       [videoId, userId]
     );
     if (shareResult.rowCount && shareResult.rowCount > 0) {
-      return { access: true, role: shareResult.rows[0].role, video };
+      return { access: true, role: shareResult.rows[0].role, video, isPublicAccess: false };
     }
   }
 
   // 4. Case C: Public Guest (Editor/Viewer via Token)
   if (video.is_public && video.public_token === publicToken) {
-    // Return the specific role set in the DB (default is 'viewer')
-    return { access: true, role: video.public_role, video };
+    return { access: true, role: video.public_role, video, isPublicAccess: true };
   }
 
-  return { access: false, role: null, video: null };
+  return { access: false, role: null, video: null, isPublicAccess: false };
 };
 
 // --- READ ROUTES ---
@@ -124,7 +123,7 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
   const { token } = req.query as { token?: string }; 
 
   try {
-    const { access, role, video } = await checkVideoAccess(id, req.user?.userId, token);
+    const { access, role, video, isPublicAccess } = await checkVideoAccess(id, req.user?.userId, token);
 
     if (!access || !video) {
       return next(new AppError('Access Denied or Video Not Found', 403));
@@ -146,7 +145,8 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
       data: {
         ...video,
         role, // 'owner', 'editor', 'viewer'
-        manifestUrl
+        manifestUrl,
+        isPublicAccess: Boolean(isPublicAccess),
       }
     });
 
@@ -220,6 +220,9 @@ export const removeShare = async (req: AuthRequest, res: Response, next: NextFun
 };
 
 // POST /api/videos/:id/public (Toggle Public Link)
+// When public access is updated or modified in any way, we nullify all previous public links:
+// - If enabling or keeping enabled: always generate a new token (invalidates old links).
+// - If disabling: set token to null.
 export const updatePublicAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const { enabled, role } = req.body; // 'viewer' or 'editor'
@@ -230,23 +233,22 @@ export const updatePublicAccess = async (req: AuthRequest, res: Response, next: 
       return next(new AppError('Permission Denied', 403));
     }
 
-    let token = null;
+    let token: string | null = null;
 
     if (enabled) {
-      // ALWAYS generate a fresh token when enabling.
-      // This invalidates any previous links associated with this video.
+      // Any update/modification with public on: generate a fresh token so all previous public links are nullified.
       token = randomBytes(16).toString('hex');
-    } 
-    // If enabled is false, token remains null (effectively destroying the link)
+    }
+    // If enabled is false: token stays null, all public links are invalidated.
 
     await pool.query(
       'UPDATE videos SET is_public = $1, public_token = $2, public_role = $3 WHERE id = $4',
       [enabled, token, role || 'viewer', id]
     );
 
-    res.status(200).json({ 
-      status: 'success', 
-      data: { is_public: enabled, public_token: token, public_role: role || 'viewer' } 
+    res.status(200).json({
+      status: 'success',
+      data: { is_public: enabled, public_token: token, public_role: role || 'viewer' }
     });
   } catch (error) {
     next(error);

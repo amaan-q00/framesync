@@ -255,11 +255,14 @@ export const videoApi = {
   deleteComment: async (
     videoId: string,
     commentId: string,
-    token?: string
+    token?: string,
+    options?: { guestName?: string }
   ): Promise<{ status: string; message: string }> => {
-    const url = token
-      ? `/videos/${videoId}/comments/${commentId}?token=${token}`
-      : `/videos/${videoId}/comments/${commentId}`;
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (options?.guestName) params.set('guestName', options.guestName);
+    const qs = params.toString();
+    const url = qs ? `/videos/${videoId}/comments/${commentId}?${qs}` : `/videos/${videoId}/comments/${commentId}`;
     return apiRequest(url, { method: 'DELETE' });
   },
 };

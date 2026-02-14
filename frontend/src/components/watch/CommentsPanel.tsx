@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, MapPin, Trash2 } from 'lucide-react';
 import type { Comment } from '@/types/video';
 import { videoApi } from '@/lib/api';
@@ -32,7 +32,10 @@ export interface CommentsPanelProps {
   role: string;
   comments: Comment[];
   currentTime: number;
-  canEdit: boolean;
+  canAddComment: boolean;
+  canDeleteAny: boolean;
+  canDeleteOwn: boolean;
+  currentUserId?: number;
   isGuest: boolean;
   guestName: string;
   onGuestNameSubmit: (name: string) => void;
@@ -60,7 +63,10 @@ export function CommentsPanel({
   role,
   comments,
   currentTime,
-  canEdit,
+  canAddComment,
+  canDeleteAny,
+  canDeleteOwn,
+  currentUserId,
   isGuest,
   guestName,
   onGuestNameSubmit,
@@ -81,11 +87,21 @@ export function CommentsPanel({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [guestInput, setGuestInput] = useState(guestName);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  const needsGuestName = isGuest && canEdit && !guestName;
+  const needsGuestName = isGuest && canAddComment && !guestName;
+
+  const canDeleteComment = (c: Comment) =>
+    canDeleteAny ||
+    (canDeleteOwn &&
+      (c.user_id != null ? c.user_id === currentUserId : isGuest && c.guest_name === guestName));
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments.length, comments]);
 
   const handleAddChat = async () => {
-    if (!canEdit) return;
+    if (!canAddComment) return;
     if (isGuest && !guestName) {
       if (guestInput.trim()) onGuestNameSubmit(guestInput.trim());
       return;
@@ -109,7 +125,7 @@ export function CommentsPanel({
   };
 
   const handleStartMarker = () => {
-    if (!canEdit) return;
+    if (!canAddMarkersInLive) return;
     if (isGuest && !guestName) {
       if (guestInput.trim()) onGuestNameSubmit(guestInput.trim());
       return;
@@ -124,7 +140,7 @@ export function CommentsPanel({
 
   const handleDelete = async (commentId: string) => {
     try {
-      await videoApi.deleteComment(videoId, commentId, token);
+      await videoApi.deleteComment(videoId, commentId, token, isGuest && guestName ? { guestName } : undefined);
       removeComment(commentId);
     } catch (err) {
       onError(getErrorMessage(err));
@@ -137,7 +153,7 @@ export function CommentsPanel({
         <MessageSquare size={18} className="text-gray-400" />
         <span className="text-sm font-medium text-white">Comments & markers</span>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0 flex flex-col">
         {needsGuestName && (
           <div className="flex flex-col gap-2 p-2 bg-gray-700/50 rounded">
             <label className="text-xs text-gray-400">Enter your name to comment</label>
@@ -162,7 +178,7 @@ export function CommentsPanel({
         {comments.length === 0 && !needsGuestName && (
           <p className="text-xs text-gray-500 py-2">No comments yet.</p>
         )}
-        {comments.map((c) => (
+        {[...comments].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()).map((c) => (
           <div
             key={c.id}
             className="rounded p-2 bg-gray-700/40 text-sm flex items-start justify-between gap-2"
@@ -195,7 +211,7 @@ export function CommentsPanel({
                 <p className="text-white break-words">{c.text || '—'}</p>
               )}
             </div>
-            {canEdit && (
+            {canDeleteComment(c) && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -210,8 +226,9 @@ export function CommentsPanel({
             )}
           </div>
         ))}
+        <div ref={commentsEndRef} />
       </div>
-      {canEdit && (guestName || !isGuest) && (
+      {canAddComment && (guestName || !isGuest) && (
         <div className="p-2 border-t border-gray-700 space-y-2">
           {markerMode && canAddMarkersInLive ? (
             <div className="space-y-2">
