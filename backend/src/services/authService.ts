@@ -31,7 +31,7 @@ export class AuthService {
     );
 
     const newUser = result.rows[0];
-    const token = jwt.sign({ userId: newUser.id, email: newUser.email }, env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: newUser.id, email: newUser.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
 
     const safeUser: SafeUser = {
       id: newUser.id,
@@ -60,7 +60,7 @@ export class AuthService {
       throw new AppError('Invalid email or password', 401);
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
 
     const safeUser: SafeUser = {
       id: user.id,

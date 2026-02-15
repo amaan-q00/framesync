@@ -117,7 +117,7 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
       sub: payload.sub,
     });
 
-    const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+    const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
     setAuthCookie(res, jwtToken);
     res.status(200).json({
       status: 'success',
@@ -183,7 +183,7 @@ export const googleCallback = async (req: Request, res: Response, next: NextFunc
       sub: payload.sub,
     });
 
-    const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+    const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
     setAuthCookie(res, jwtToken);
 
     const frontend = env.FRONTEND_URL.replace(/\/$/, '');
