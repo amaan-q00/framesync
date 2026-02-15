@@ -10,6 +10,8 @@ import Button from '@/components/ui/Button';
 import GoogleButton from '@/components/auth/GoogleButton';
 import { RegisterCredentials } from '@/types/auth';
 import { getErrorMessage } from '@/lib/utils';
+import { UserPlus } from 'lucide-react';
+import AppLogo from '@/components/ui/AppLogo';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState<RegisterCredentials>({
@@ -51,7 +53,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
 
     setIsLoading(true);
@@ -76,21 +78,28 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-page py-8 px-4 sm:py-12 sm:px-6 lg:px-8 animate-fade-in">
+      <AppLogo href="/" className="mb-6 sm:mb-8" />
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="text-center text-2xl sm:text-3xl font-bold text-fg">
             Create your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-fg-muted">
             Or{' '}
-            <AppLink href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+            <AppLink
+              href="/login"
+              className="font-medium text-primary hover:text-accent transition-colors duration-150"
+            >
               sign in to your existing account
             </AppLink>
           </p>
         </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+
+        <form
+          className="mt-6 sm:mt-8 space-y-6 animate-slide-up"
+          onSubmit={handleSubmit}
+        >
           <div className="space-y-4">
             <Input
               label="Full name"
@@ -103,7 +112,7 @@ export default function RegisterPage() {
               placeholder="Enter your full name"
               disabled={isLoading}
             />
-            
+
             <Input
               label="Email address"
               name="email"
@@ -115,7 +124,7 @@ export default function RegisterPage() {
               placeholder="Enter your email"
               disabled={isLoading}
             />
-            
+
             <Input
               label="Password"
               name="password"
@@ -129,23 +138,25 @@ export default function RegisterPage() {
             />
           </div>
 
-          
           <div className="space-y-3">
             <Button
               type="submit"
               disabled={isLoading}
               isLoading={isLoading}
               className="w-full"
+              icon={<UserPlus className="w-[1.125em] h-[1.125em]" />}
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-50 text-gray-500">Or continue with</span>
+                <span className="px-2 bg-page text-fg-muted">
+                  Or continue with
+                </span>
               </div>
             </div>
 

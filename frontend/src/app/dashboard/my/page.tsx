@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { useDashboardSync } from '@/contexts/DashboardSyncContext';
 import { getErrorMessage } from '@/lib/utils';
 import type { MyWorkVideo } from '@/types/video';
-import { ChevronLeft, ChevronRight, Video, ArrowLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, ArrowLeft, Upload } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
@@ -73,18 +73,20 @@ export default function DashboardMyPage(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <DashboardNav />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-gray-900">
-            <Video size={24} className="shrink-0 text-gray-600" aria-hidden />
+          <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-fg">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <Video size={22} className="shrink-0" aria-hidden />
+            </span>
             My work
           </h1>
           <AppLink
             href="/dashboard"
-            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 w-fit"
+            className="flex items-center gap-1.5 text-sm text-fg-muted hover:text-accent w-fit min-h-[44px] items-center transition-colors duration-150"
           >
             <ArrowLeft size={18} aria-hidden />
             Dashboard
@@ -94,12 +96,15 @@ export default function DashboardMyPage(): React.ReactElement {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="rounded-lg border border-gray-200 bg-white aspect-video animate-pulse" />
+              <div key={i} className="rounded-lg border border-border bg-surface aspect-video animate-pulse" />
             ))}
           </div>
         ) : videos.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-12 text-center text-gray-500">
-            No videos yet. Use the upload button to add one.
+          <div className="rounded-lg border border-border bg-surface p-8 sm:p-12 text-center text-fg-muted">
+            <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-primary mb-3">
+              <Upload size={32} aria-hidden />
+            </span>
+            <p className="text-sm sm:text-base">No videos yet. Use the upload button to add one.</p>
           </div>
         ) : (
           <>
@@ -128,19 +133,19 @@ export default function DashboardMyPage(): React.ReactElement {
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
+                className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 min-h-[44px] text-sm font-medium text-fg hover:bg-elevated disabled:opacity-50 disabled:pointer-events-none touch-manipulation transition-colors duration-150"
               >
                 <ChevronLeft size={18} aria-hidden />
                 Previous
               </button>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-fg-muted">
                 Page {page} of {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none touch-manipulation"
+                className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 min-h-[44px] text-sm font-medium text-fg hover:bg-elevated disabled:opacity-50 disabled:pointer-events-none touch-manipulation transition-colors duration-150"
               >
                 Next
                 <ChevronRight size={18} aria-hidden />

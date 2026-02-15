@@ -11,7 +11,7 @@ const ToastContainer: React.FC = () => {
 
   return (
     <div
-      className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 max-h-[100dvh] overflow-hidden pointer-events-none [&>*]:pointer-events-auto"
+      className="fixed top-4 right-4 left-4 sm:left-auto z-[9999] flex flex-col gap-2 max-h-[100dvh] overflow-hidden pointer-events-none [&>*]:pointer-events-auto"
       aria-live="polite"
       aria-label="Notifications"
     >

@@ -208,7 +208,7 @@ export const getComments = async (
 
   try {
     const result = await pool.query(
-      `SELECT c.*, u.name as user_name, u.email as user_email 
+      `SELECT c.*, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar 
        FROM comments c
        LEFT JOIN users u ON c.user_id = u.id
        WHERE c.video_id = $1 

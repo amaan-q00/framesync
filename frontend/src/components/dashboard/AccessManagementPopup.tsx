@@ -131,47 +131,51 @@ export function AccessManagementPopup({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div
-        className="relative w-full max-w-md rounded-xl bg-white shadow-xl text-gray-900"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        className="relative w-full max-w-md rounded-xl bg-elevated border border-border shadow-xl animate-slide-up"
         role="dialog"
         aria-modal="true"
         aria-labelledby="access-title"
         onKeyDown={(e) => e.key === 'Escape' && onClose()}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 p-4 bg-white">
-          <h2 id="access-title" className="text-lg font-semibold text-gray-900">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <h2 id="access-title" className="text-lg font-semibold text-fg">
             Manage access
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            className="rounded p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-fg-muted hover:bg-surface hover:text-fg transition-colors duration-150"
             aria-label="Close"
           >
-            <X size={20} />
+            <X size={20} aria-hidden />
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-4 space-y-6 bg-white text-gray-900">
+        <div className="max-h-[70vh] overflow-y-auto p-4 space-y-6 text-fg">
           {/* Share with someone */}
           <section>
-            <h3 className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-2">
-              <UserPlus size={16} />
+            <h3 className="flex items-center gap-2 text-sm font-medium text-fg mb-2">
+              <UserPlus size={16} aria-hidden />
               Share with someone
             </h3>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 type="email"
                 value={shareEmail}
                 onChange={(e) => setShareEmail(e.target.value)}
                 placeholder="Email address"
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 min-w-[140px] rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-[border-color,box-shadow] duration-150"
               />
               <select
                 value={shareRole}
                 onChange={(e) => setShareRole(e.target.value as 'viewer' | 'editor')}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 [&>option]:bg-white [&>option]:text-gray-900"
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
               >
                 <option value="viewer">Viewer</option>
                 <option value="editor">Editor</option>
@@ -182,38 +186,43 @@ export function AccessManagementPopup({
                 onClick={handleAddShare}
                 disabled={!shareEmail.trim() || adding}
                 isLoading={adding}
+                className="min-w-[44px]"
+                aria-label="Add"
+                icon={<UserPlus size={18} />}
               >
-                Add
+                <span className="sr-only">Add</span>
               </Button>
             </div>
           </section>
 
           {/* People with access */}
           <section>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">People with access</h3>
+            <h3 className="text-sm font-medium text-fg mb-2">People with access</h3>
             {loading ? (
-              <p className="text-sm text-gray-500">Loading…</p>
+              <p className="text-sm text-fg-muted">Loading…</p>
             ) : shares.length === 0 ? (
-              <p className="text-sm text-gray-500">No one else has been invited.</p>
+              <p className="text-sm text-fg-muted">No one else has been invited.</p>
             ) : (
               <ul className="space-y-2">
                 {shares.map((s) => (
                   <li
                     key={s.user_id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                   >
                     <div className="min-w-0 flex-1">
-                      <span className="font-medium text-gray-900">{s.email}</span>
+                      <span className="font-medium text-fg">{s.email}</span>
                       {s.name && s.name !== s.email && (
-                        <span className="ml-2 text-gray-500">({s.name})</span>
+                        <span className="ml-2 text-fg-muted">({s.name})</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <select
                         value={s.role}
-                        onChange={(e) => handleUpdateShareRole(s.user_id, s.email, e.target.value as 'viewer' | 'editor')}
+                        onChange={(e) =>
+                          handleUpdateShareRole(s.user_id, s.email, e.target.value as 'viewer' | 'editor')
+                        }
                         disabled={updatingRoleUserId === s.user_id}
-                        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-white [&_option]:text-gray-900"
+                        className="rounded border border-border bg-page px-2 py-1.5 text-xs text-fg focus:outline-none focus:ring-1 focus:ring-primary min-h-[36px]"
                       >
                         <option value="viewer">Viewer</option>
                         <option value="editor">Editor</option>
@@ -222,7 +231,7 @@ export function AccessManagementPopup({
                         type="button"
                         onClick={() => handleRemoveShare(s.user_id)}
                         disabled={removingUserId === s.user_id}
-                        className="text-red-600 hover:text-red-800 text-xs font-medium"
+                        className="text-danger hover:opacity-90 text-xs font-medium min-h-[36px] flex items-center transition-opacity"
                       >
                         Remove
                       </button>
@@ -235,25 +244,25 @@ export function AccessManagementPopup({
 
           {/* Public link */}
           <section>
-            <h3 className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-2">
-              <Link2 size={16} />
+            <h3 className="flex items-center gap-2 text-sm font-medium text-fg mb-2">
+              <Link2 size={16} aria-hidden />
               Public link
             </h3>
             <div className="space-y-3">
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 min-h-[44px] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={publicEnabled}
                   onChange={handleTogglePublic}
                   disabled={togglingPublic}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-border text-primary focus:ring-primary"
                 />
-                <span className="text-sm text-gray-700">Anyone with the link can view</span>
+                <span className="text-sm text-fg-muted">Anyone with the link can view</span>
               </label>
               {publicEnabled && (
                 <>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Link access</label>
+                    <label className="block text-xs text-fg-muted mb-1">Link access</label>
                     <select
                       value={publicRoleLocal}
                       onChange={async (e) => {
@@ -262,7 +271,10 @@ export function AccessManagementPopup({
                         if (!publicEnabled) return;
                         setTogglingPublic(true);
                         try {
-                          const res = await videoApi.setPublicAccess(videoId, { enabled: true, role });
+                          const res = await videoApi.setPublicAccess(videoId, {
+                            enabled: true,
+                            role,
+                          });
                           setPublicTokenLocal(res.data.public_token ?? null);
                           setPublicRoleLocal(res.data.public_role);
                           onUpdated?.();
@@ -273,7 +285,7 @@ export function AccessManagementPopup({
                         }
                       }}
                       disabled={togglingPublic}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 [&>option]:bg-white [&>option]:text-gray-900"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
                     >
                       <option value="viewer">Viewer</option>
                       <option value="editor">Editor</option>
@@ -286,8 +298,8 @@ export function AccessManagementPopup({
                       size="sm"
                       onClick={handleCopyPublicLink}
                       className="w-full flex items-center justify-center gap-2"
+                      icon={<Copy size={16} />}
                     >
-                      <Copy size={16} />
                       Copy link
                     </Button>
                   )}

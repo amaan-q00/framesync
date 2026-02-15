@@ -3,13 +3,14 @@
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLink from '@/components/ui/AppLink';
+import AppLogo from '@/components/ui/AppLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import { authApi, profileApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { User, Camera, AlertTriangle } from 'lucide-react';
+import { User, Camera, AlertTriangle, Save, ArrowLeft } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -116,64 +117,59 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-page">
+      <nav className="bg-elevated border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <AppLink href="/dashboard" className="text-xl font-semibold text-gray-900 hover:text-blue-600">
-                FrameSync
-              </AppLink>
-            </div>
-            <div className="flex items-center space-x-4">
-              <AppLink
-                href="/dashboard"
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Dashboard
-              </AppLink>
-            </div>
+          <div className="flex justify-between h-14 sm:h-16 items-center">
+            <AppLogo href="/dashboard" />
+            <AppLink
+              href="/dashboard"
+              className="text-sm text-fg-muted hover:text-fg min-h-[44px] flex items-center transition-colors duration-150"
+            >
+              Dashboard
+            </AppLink>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Profile Settings</h2>
-          
+      <main className="max-w-3xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
+        <div className="bg-surface border border-border rounded-lg p-6 shadow-sm animate-slide-up">
+          <h2 className="text-xl sm:text-2xl font-bold text-fg mb-6">Profile Settings</h2>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Avatar Section */}
-            <div className="flex items-center space-x-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
               <div className="relative">
-                <div 
+                <div
                   onClick={handleAvatarClick}
-                  className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center"
+                  className="w-24 h-24 rounded-full overflow-hidden bg-elevated cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center border border-border"
                 >
                   {avatarUrl ? (
-                    <img 
-                      src={avatarUrl} 
-                      alt="Avatar" 
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="w-12 h-12 text-gray-400" />
+                    <User className="w-12 h-12 text-fg-muted" aria-hidden />
                   )}
                 </div>
                 <button
                   type="button"
                   onClick={handleAvatarClick}
                   disabled={isUploading}
-                  className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50"
+                  className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full hover:opacity-90 disabled:opacity-50 min-h-[44px] min-w-[44px] flex items-center justify-center transition-opacity"
+                  aria-label="Upload avatar"
                 >
-                  <Camera className="w-4 h-4" />
+                  <Camera className="w-4 h-4" aria-hidden />
                 </button>
               </div>
               <div>
-                <h3 className="text-lg font-medium text-gray-900">Profile Picture</h3>
-                <p className="text-sm text-gray-500 mb-2">
+                <h3 className="text-lg font-medium text-fg">Profile Picture</h3>
+                <p className="text-sm text-fg-muted mb-1">
                   Click the camera icon to upload a new avatar
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-fg-muted">
                   JPEG, PNG, or WebP. Max 5MB.
                 </p>
               </div>
@@ -197,25 +193,21 @@ export default function SettingsPage() {
 
             {/* Email Field (Read-only) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-fg mb-1">Email</label>
               <input
                 type="email"
                 value={user?.email || ''}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-elevated text-fg-muted cursor-not-allowed"
               />
-              <p className="mt-1 text-xs text-gray-500">
-                Email cannot be changed
-              </p>
+              <p className="mt-1 text-xs text-fg-muted">Email cannot be changed</p>
             </div>
 
             {/* Submit Button */}
-            <div className="flex justify-end space-x-4">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 sm:space-x-4">
               <AppLink
                 href="/dashboard"
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2 text-sm font-medium text-fg bg-surface border border-border rounded-lg hover:bg-elevated hover:border-primary/50 transition-colors duration-150"
               >
                 Cancel
               </AppLink>
@@ -223,6 +215,7 @@ export default function SettingsPage() {
                 type="submit"
                 disabled={isLoading || isUploading}
                 isLoading={isLoading}
+                icon={<Save className="w-[1.125em] h-[1.125em]" />}
               >
                 Save Changes
               </Button>
@@ -231,12 +224,12 @@ export default function SettingsPage() {
         </div>
 
         {/* Danger zone: Delete account */}
-        <div className="mt-8 bg-white shadow rounded-lg p-6 border border-red-200">
-          <h2 className="text-lg font-semibold text-red-700 mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5" />
+        <div className="mt-6 sm:mt-8 bg-surface border border-danger/50 rounded-lg p-6 animate-slide-up">
+          <h2 className="text-lg font-semibold text-danger mb-2 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden />
             Danger zone
           </h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-fg-muted mb-4">
             Permanently delete your account and all your videos and data. This cannot be undone.
           </p>
           <Button
@@ -252,10 +245,20 @@ export default function SettingsPage() {
 
       {/* Delete account modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-modal="true" role="dialog" aria-labelledby="delete-title">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h2 id="delete-title" className="text-lg font-semibold text-gray-900 mb-2">Delete account</h2>
-            <p className="text-sm text-gray-600 mb-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+          aria-modal="true"
+          role="dialog"
+          aria-labelledby="delete-title"
+        >
+          <div
+            className="bg-elevated border border-border rounded-lg shadow-xl max-w-md w-full p-6 animate-slide-up"
+            onKeyDown={(e) => e.key === 'Escape' && (setShowDeleteModal(false), setDeleteConfirmEmail(''))}
+          >
+            <h2 id="delete-title" className="text-lg font-semibold text-fg mb-2">
+              Delete account
+            </h2>
+            <p className="text-sm text-fg-muted mb-4">
               Type your account email below to confirm. All your data will be permanently deleted.
             </p>
             <form onSubmit={handleDeleteAccount} className="space-y-4">
@@ -267,18 +270,25 @@ export default function SettingsPage() {
                 placeholder={user?.email || 'Enter your email'}
                 disabled={isDeleting}
                 autoComplete="email"
-                className="bg-white text-gray-900 placeholder:text-gray-500"
               />
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => { setShowDeleteModal(false); setDeleteConfirmEmail(''); }}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteConfirmEmail('');
+                  }}
                   disabled={isDeleting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" variant="destructive" disabled={isDeleting} isLoading={isDeleting}>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={isDeleting}
+                  isLoading={isDeleting}
+                >
                   Delete account
                 </Button>
               </div>

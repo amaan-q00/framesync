@@ -22,15 +22,15 @@ function formatFileSize(bytes: number): string {
 function statusColor(status: UploadSession['status']): string {
   switch (status) {
     case 'uploading':
-      return 'text-blue-600';
+      return 'text-primary';
     case 'processing':
-      return 'text-amber-600';
+      return 'text-warning';
     case 'complete':
-      return 'text-green-600';
+      return 'text-success';
     case 'error':
-      return 'text-red-600';
+      return 'text-danger';
     default:
-      return 'text-gray-600';
+      return 'text-fg-muted';
   }
 }
 
@@ -55,15 +55,15 @@ export function UploadQueueItem({ upload }: UploadQueueItemProps): React.ReactEl
   const { cancelUpload, removeUpload } = useUploadContext();
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
+    <div className="rounded-lg border border-border bg-surface p-4 transition-colors duration-150">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-900">{upload.title}</p>
-          <p className="text-xs text-gray-500">
+          <p className="truncate text-sm font-medium text-fg">{upload.title}</p>
+          <p className="text-xs text-fg-muted">
             {formatFileSize(upload.file.size)} · {upload.file.name}
           </p>
           {upload.description && (
-            <p className="mt-0.5 truncate text-xs text-gray-400">{upload.description}</p>
+            <p className="mt-0.5 truncate text-xs text-fg-muted">{upload.description}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -74,7 +74,7 @@ export function UploadQueueItem({ upload }: UploadQueueItemProps): React.ReactEl
             <button
               type="button"
               onClick={() => cancelUpload(upload.videoId)}
-              className="text-xs text-red-600 hover:text-red-800"
+              className="text-xs text-danger hover:opacity-90 min-h-[32px] flex items-center transition-opacity"
             >
               Cancel
             </button>
@@ -83,7 +83,7 @@ export function UploadQueueItem({ upload }: UploadQueueItemProps): React.ReactEl
             <button
               type="button"
               onClick={() => removeUpload(upload.videoId)}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              className="text-xs text-fg-muted hover:text-fg min-h-[32px] flex items-center transition-colors duration-150"
             >
               Remove
             </button>
@@ -93,9 +93,9 @@ export function UploadQueueItem({ upload }: UploadQueueItemProps): React.ReactEl
 
       {(upload.status === 'uploading' || upload.status === 'processing') && (
         <div className="mt-3">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-elevated">
             <div
-              className="h-full bg-blue-600 rounded-full transition-all duration-300"
+              className="h-full bg-primary rounded-full transition-all duration-300"
               style={{ width: `${upload.progress}%` }}
             />
           </div>
@@ -104,7 +104,7 @@ export function UploadQueueItem({ upload }: UploadQueueItemProps): React.ReactEl
 
       {upload.isPublic && (
         <div className="mt-2">
-          <span className="inline-flex items-center rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+          <span className="inline-flex items-center rounded bg-success/20 px-2 py-0.5 text-xs font-medium text-success">
             Public · {upload.publicRole === 'editor' ? 'Editor' : 'Viewer'}
           </span>
         </div>

@@ -87,21 +87,23 @@ export default function DashboardPage(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <DashboardNav />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
         {/* My Work */}
         <section className="mb-8 sm:mb-10">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-900">
-              <Video size={22} className="shrink-0 text-gray-600" aria-hidden />
+            <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-fg">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Video size={20} className="shrink-0" aria-hidden />
+              </span>
               My work
             </h2>
             {myWorkTotal > LIMIT_PREVIEW && (
               <AppLink
                 href="/dashboard/my"
-                className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-500 shrink-0"
+                className="flex items-center gap-1 text-sm font-medium text-primary hover:text-accent transition-colors duration-150 shrink-0"
               >
                 See all ({myWorkTotal})
                 <ChevronRight size={18} aria-hidden />
@@ -111,12 +113,14 @@ export default function DashboardPage(): React.ReactElement {
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="rounded-lg border border-gray-200 bg-white h-40 sm:h-44 animate-pulse" />
+                <div key={i} className="rounded-lg border border-border bg-surface h-40 sm:h-44 animate-pulse" />
               ))}
             </div>
           ) : myWork.length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 sm:p-8 text-center text-gray-500">
-              <Upload size={40} className="mx-auto mb-3 text-gray-400" aria-hidden />
+            <div className="rounded-lg border border-border bg-surface p-6 sm:p-8 text-center text-fg-muted">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-primary mb-3">
+                <Upload size={28} aria-hidden />
+              </span>
               <p className="text-sm sm:text-base">No videos yet. Use the upload button to add one.</p>
             </div>
           ) : (
@@ -144,14 +148,16 @@ export default function DashboardPage(): React.ReactElement {
         {/* Shared with me */}
         <section>
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-900">
-              <Users size={22} className="shrink-0 text-gray-600" aria-hidden />
+            <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-fg">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Users size={20} className="shrink-0" aria-hidden />
+              </span>
               Shared with me
             </h2>
             {sharedTotal > LIMIT_PREVIEW && (
               <AppLink
                 href="/dashboard/shared"
-                className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-500 shrink-0"
+                className="flex items-center gap-1 text-sm font-medium text-primary hover:text-accent transition-colors duration-150 shrink-0"
               >
                 See all ({sharedTotal})
                 <ChevronRight size={18} aria-hidden />
@@ -161,12 +167,14 @@ export default function DashboardPage(): React.ReactElement {
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="rounded-lg border border-gray-200 bg-white h-40 sm:h-44 animate-pulse" />
+                <div key={i} className="rounded-lg border border-border bg-surface h-40 sm:h-44 animate-pulse" />
               ))}
             </div>
           ) : shared.length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 sm:p-8 text-center text-gray-500">
-              <Share2 size={40} className="mx-auto mb-3 text-gray-400" aria-hidden />
+            <div className="rounded-lg border border-border bg-surface p-6 sm:p-8 text-center text-fg-muted">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-primary mb-3">
+                <Share2 size={28} aria-hidden />
+              </span>
               <p className="text-sm sm:text-base">No videos shared with you yet.</p>
             </div>
           ) : (

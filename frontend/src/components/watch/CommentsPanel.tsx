@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, MapPin, Trash2 } from 'lucide-react';
+import { MessageSquare, MapPin, Trash2, Send, Check, XCircle } from 'lucide-react';
 import type { Comment } from '@/types/video';
 import { videoApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
@@ -148,27 +148,27 @@ export function CommentsPanel({
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-800/80 rounded-lg border border-gray-700">
-      <div className="p-2 border-b border-gray-700 flex items-center gap-2">
-        <MessageSquare size={18} className="text-gray-400" />
-        <span className="text-sm font-medium text-white">Comments & markers</span>
+    <div className="flex flex-col h-full bg-surface rounded-lg border border-border">
+      <div className="p-2 border-b border-border flex items-center gap-2">
+        <MessageSquare size={18} className="text-fg-muted shrink-0" aria-hidden />
+        <span className="text-sm font-medium text-fg">Comments & markers</span>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0 flex flex-col">
         {needsGuestName && (
-          <div className="flex flex-col gap-2 p-2 bg-gray-700/50 rounded">
-            <label className="text-xs text-gray-400">Enter your name to comment</label>
+          <div className="flex flex-col gap-2 p-2 bg-elevated rounded-lg">
+            <label className="text-xs text-fg-muted">Enter your name to comment</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={guestInput}
                 onChange={(e) => setGuestInput(e.target.value)}
                 placeholder="Your name"
-                className="flex-1 rounded px-2 py-1.5 text-sm bg-gray-800 border border-gray-600 text-white placeholder-gray-500"
+                className="flex-1 rounded px-2 py-1.5 text-sm bg-page border border-border text-fg placeholder:text-fg-muted focus:ring-2 focus:ring-primary focus:border-primary transition-[border-color,box-shadow] duration-150"
               />
               <button
                 type="button"
                 onClick={() => guestInput.trim() && onGuestNameSubmit(guestInput.trim())}
-                className="rounded px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-500"
+                className="rounded px-3 py-1.5 min-h-[44px] text-sm bg-primary text-white hover:opacity-90 transition-opacity"
               >
                 Continue
               </button>
@@ -176,63 +176,82 @@ export function CommentsPanel({
           </div>
         )}
         {comments.length === 0 && !needsGuestName && (
-          <p className="text-xs text-gray-500 py-2">No comments yet.</p>
+          <p className="text-xs text-fg-muted py-2">No comments yet.</p>
         )}
-        {[...comments].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()).map((c) => (
-          <div
-            key={c.id}
-            className="rounded p-2 bg-gray-700/40 text-sm flex items-start justify-between gap-2"
-          >
+        {[...comments].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()).map((c) => {
+          const displayName = c.user_name ?? c.guest_name ?? 'Guest';
+          const initials = displayName.slice(0, 2).toUpperCase();
+          return (
             <div
-              className="min-w-0 flex-1 cursor-pointer"
-              onClick={() => onSeekToTimestamp?.(c.timestamp, c)}
-              onKeyDown={(e) => {
-                if ((e.key === 'Enter' || e.key === ' ') && onSeekToTimestamp) {
-                  e.preventDefault();
-                  onSeekToTimestamp(c.timestamp, c);
-                }
-              }}
-              role={onSeekToTimestamp ? 'button' : undefined}
-              tabIndex={onSeekToTimestamp ? 0 : undefined}
-              title={onSeekToTimestamp ? `Jump to ${formatTime(c.timestamp)}${(c.type === 'marker' || c.type === 'shape') ? ' (play to end)' : ''}` : undefined}
+              key={c.id}
+              className="rounded-lg p-2 bg-elevated text-sm flex items-start gap-3 border border-border-subtle"
             >
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-gray-400 font-medium truncate">
-                  {c.user_name ?? c.guest_name ?? 'Guest'}
-                </span>
-                <span className="text-gray-500 text-xs">{formatTime(c.timestamp)}</span>
-                {c.type === 'marker' && (
-                  <MapPin size={14} className="text-amber-400 shrink-0" aria-hidden />
+              <div className="shrink-0 mt-0.5">
+                {c.user_avatar ? (
+                  <img
+                    src={c.user_avatar}
+                    alt=""
+                    className="h-8 w-8 rounded-full object-cover bg-elevated border border-border"
+                  />
+                ) : (
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-medium border border-border">
+                    {initials}
+                  </span>
                 )}
               </div>
-              {c.type === 'shape' ? (
-                <p className="text-gray-400 italic">Drawing</p>
-              ) : (
-                <p className="text-white break-words">{c.text || '—'}</p>
+              <div className="min-w-0 flex-1">
+                <div
+                  className="cursor-pointer"
+                  onClick={() => onSeekToTimestamp?.(c.timestamp, c)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && onSeekToTimestamp) {
+                      e.preventDefault();
+                      onSeekToTimestamp(c.timestamp, c);
+                    }
+                  }}
+                  role={onSeekToTimestamp ? 'button' : undefined}
+                  tabIndex={onSeekToTimestamp ? 0 : undefined}
+                  title={onSeekToTimestamp ? `Jump to ${formatTime(c.timestamp)}${(c.type === 'marker' || c.type === 'shape') ? ' (play to end)' : ''}` : undefined}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-fg-muted font-medium truncate">
+                      {displayName}
+                    </span>
+                    <span className="text-fg-muted text-xs">{formatTime(c.timestamp)}</span>
+                    {c.type === 'marker' && (
+                      <MapPin size={14} className="text-warning shrink-0" aria-hidden />
+                    )}
+                  </div>
+                  {c.type === 'shape' ? (
+                    <p className="text-fg-muted italic">Drawing</p>
+                  ) : (
+                    <p className="text-fg break-words">{c.text || '—'}</p>
+                  )}
+                </div>
+              </div>
+              {canDeleteComment(c) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(c.id);
+                  }}
+                  className="shrink-0 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-fg-muted hover:text-danger transition-colors duration-150"
+                  aria-label="Delete comment"
+                >
+                  <Trash2 size={14} aria-hidden />
+                </button>
               )}
             </div>
-            {canDeleteComment(c) && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(c.id);
-                }}
-                className="shrink-0 p-1 text-gray-400 hover:text-red-400"
-                aria-label="Delete comment"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
         <div ref={commentsEndRef} />
       </div>
       {canAddComment && (guestName || !isGuest) && (
-        <div className="p-2 border-t border-gray-700 space-y-2">
+        <div className="p-2 border-t border-border space-y-2">
           {markerMode && canAddMarkersInLive ? (
             <div className="space-y-2">
-              <p className="text-xs text-amber-400">
+              <p className="text-xs text-warning">
                 {markerMode.segmentStartTime != null
                   ? 'Drawing — click Done drawing to resume video, or add more segments.'
                   : 'Adding marker — click Draw to freeze and draw, or add label and End marker.'}
@@ -241,9 +260,9 @@ export function CommentsPanel({
                 <button
                   type="button"
                   onClick={onStartDraw}
-                  className="w-full rounded px-2 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-500 flex items-center justify-center gap-1.5"
+                  className="w-full rounded px-2 py-2 min-h-[44px] text-sm bg-primary text-white hover:opacity-90 flex items-center justify-center gap-1.5 transition-opacity"
                 >
-                  <MapPin size={14} />
+                  <MapPin size={14} aria-hidden />
                   Draw
                 </button>
               ) : (
@@ -251,40 +270,42 @@ export function CommentsPanel({
                   <button
                     type="button"
                     onClick={onDoneDrawing}
-                    className="flex-1 rounded px-2 py-1.5 text-sm bg-green-600 text-white hover:bg-green-500 flex items-center justify-center gap-1.5"
+                    className="flex-1 rounded px-2 py-2 min-h-[44px] text-sm bg-success text-white hover:opacity-90 flex items-center justify-center gap-1.5 transition-opacity"
                   >
+                    <Check size={16} aria-hidden />
                     Done drawing
                   </button>
                   {onCancelDrawing && (
                     <button
                       type="button"
                       onClick={onCancelDrawing}
-                      className="rounded px-2 py-1.5 text-sm bg-gray-600 text-white hover:bg-gray-500 flex items-center justify-center"
+                      className="rounded px-2 py-2 min-h-[44px] text-sm bg-elevated border border-border text-fg hover:bg-surface flex items-center justify-center gap-1.5 transition-colors duration-150"
                       title="Cancel current drawing (discard this segment)"
                     >
+                      <XCircle size={16} aria-hidden />
                       Cancel
                     </button>
                   )}
                 </div>
               )}
               {markerMode.segments.length > 0 && (
-                <p className="text-xs text-gray-400">{markerMode.segments.length} segment(s)</p>
+                <p className="text-xs text-fg-muted">{markerMode.segments.length} segment(s)</p>
               )}
               <input
                 type="text"
                 value={markerMode.label}
                 onChange={(e) => onMarkerLabelChange(e.target.value)}
                 placeholder="Label for marker (optional)"
-                className="w-full rounded px-2 py-1.5 text-sm bg-gray-800 border border-gray-600 text-white placeholder-gray-500"
+                className="w-full rounded px-2 py-1.5 text-sm bg-page border border-border text-fg placeholder:text-fg-muted focus:ring-2 focus:ring-primary focus:border-primary"
               />
               <button
                 type="button"
                 onClick={handleEndMarker}
                 disabled={submitting || markerSaving || markerMode.segmentStartTime != null}
-                className="w-full rounded px-2 py-1.5 text-sm bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="w-full rounded px-2 py-2 min-h-[44px] text-sm bg-warning text-white hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-opacity"
                 title={markerMode.segmentStartTime != null ? 'Finish or cancel current drawing first' : undefined}
               >
-                <MapPin size={14} />
+                <MapPin size={14} aria-hidden />
                 End marker
               </button>
             </div>
@@ -297,15 +318,16 @@ export function CommentsPanel({
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddChat()}
                   placeholder="Add comment at current time..."
-                  className="flex-1 rounded px-2 py-1.5 text-sm bg-gray-800 border border-gray-600 text-white placeholder-gray-500"
+                  className="flex-1 rounded px-2 py-1.5 text-sm bg-page border border-border text-fg placeholder:text-fg-muted focus:ring-2 focus:ring-primary focus:border-primary"
                 />
                 <button
                   type="button"
                   onClick={handleAddChat}
                   disabled={submitting}
-                  className="rounded px-3 py-1.5 text-sm bg-gray-600 text-white hover:bg-gray-500 disabled:opacity-50"
+                  className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center bg-primary text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  aria-label="Send comment"
                 >
-                  Add
+                  <Send size={20} aria-hidden />
                 </button>
               </div>
               {canAddMarkersInLive && (
@@ -313,9 +335,9 @@ export function CommentsPanel({
                   type="button"
                   onClick={handleStartMarker}
                   disabled={submitting}
-                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-amber-400 hover:bg-gray-700"
+                  className="flex items-center gap-1.5 rounded px-2 py-2 min-h-[44px] text-xs text-warning hover:bg-elevated transition-colors duration-150"
                 >
-                  <MapPin size={14} />
+                  <MapPin size={14} aria-hidden />
                   Add marker
                 </button>
               )}

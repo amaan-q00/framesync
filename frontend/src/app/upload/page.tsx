@@ -2,7 +2,9 @@
 
 import React from 'react';
 import AppLink from '@/components/ui/AppLink';
-import { Upload as UploadIcon, ArrowLeft, Settings } from 'lucide-react';
+import AppLogo from '@/components/ui/AppLogo';
+import { useAuth } from '@/contexts/AuthContext';
+import { Upload as UploadIcon, ArrowLeft, X, User } from 'lucide-react';
 import { useUploadContext } from '@/contexts/UploadContext';
 import { useUploadForm } from '@/hooks/useUploadForm';
 import { DropZone } from '@/components/upload/DropZone';
@@ -10,7 +12,10 @@ import { UploadQueueItem } from '@/components/upload/UploadQueueItem';
 import Button from '@/components/ui/Button';
 
 export default function UploadPage(): React.ReactElement {
+  const { user } = useAuth();
   const { uploads } = useUploadContext();
+  const displayName = user?.name ?? '';
+  const initials = displayName ? displayName.slice(0, 2).toUpperCase() : '';
   const {
     showForm,
     selectedFiles,
@@ -21,31 +26,41 @@ export default function UploadPage(): React.ReactElement {
     handleCancelForm,
   } = useUploadForm();
 
+  const linkClass =
+    'flex items-center gap-1.5 rounded-lg p-3 min-h-[44px] min-w-[44px] sm:min-w-0 sm:px-3 sm:py-2 text-fg-muted hover:bg-surface hover:text-fg transition-colors duration-150';
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+    <div className="min-h-screen bg-page">
+      <nav className="sticky top-0 z-10 border-b border-border bg-elevated">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
-            <AppLink
-              href="/dashboard"
-              className="text-lg sm:text-xl font-semibold text-gray-900 hover:text-blue-600 shrink-0"
-            >
-              FrameSync
-            </AppLink>
-            <div className="flex items-center gap-2 sm:gap-4">
-              <AppLink
-                href="/dashboard"
-                className="flex items-center gap-1.5 rounded-lg p-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-              >
-                <ArrowLeft size={18} aria-hidden />
+            <AppLogo href="/dashboard" />
+            <div className="flex items-center gap-1 sm:gap-2">
+              <AppLink href="/dashboard" className={linkClass}>
+                <ArrowLeft size={18} className="shrink-0" aria-hidden />
                 <span className="hidden sm:inline">Dashboard</span>
               </AppLink>
               <AppLink
                 href="/settings"
-                className="flex items-center gap-1.5 rounded-lg p-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                className="flex items-center gap-2 rounded-lg p-1.5 sm:px-2 sm:py-1.5 min-h-[44px] min-w-[44px] sm:min-w-0 text-fg-muted hover:bg-surface hover:text-fg transition-colors duration-150"
+                aria-label="Profile and settings"
               >
-                <Settings size={18} aria-hidden />
-                <span className="hidden sm:inline">Settings</span>
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    className="h-8 w-8 rounded-full object-cover border border-border shrink-0"
+                  />
+                ) : (
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary border border-border shrink-0">
+                    {initials ? (
+                      <span className="text-xs font-medium">{initials}</span>
+                    ) : (
+                      <User size={14} aria-hidden />
+                    )}
+                  </span>
+                )}
+                <span className="hidden sm:inline max-w-[100px] truncate text-sm">Profile</span>
               </AppLink>
             </div>
           </div>
@@ -53,8 +68,10 @@ export default function UploadPage(): React.ReactElement {
       </nav>
 
       <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
-        <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-gray-900 mb-6">
-          <UploadIcon size={28} className="shrink-0 text-gray-600" aria-hidden />
+        <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-fg mb-6">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <UploadIcon size={24} className="shrink-0" aria-hidden />
+          </span>
           Upload videos
         </h1>
 
@@ -63,11 +80,11 @@ export default function UploadPage(): React.ReactElement {
         ) : (
           <div className="space-y-4">
             {selectedFiles.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">
+              <div className="rounded-lg bg-surface border border-border p-4">
+                <p className="text-sm font-medium text-fg mb-2">
                   Selected ({selectedFiles.length})
                 </p>
-                <ul className="space-y-1 text-sm text-gray-600">
+                <ul className="space-y-1 text-sm text-fg-muted">
                   {selectedFiles.map((file, i) => (
                     <li key={i} className="truncate">
                       {file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)
@@ -77,10 +94,10 @@ export default function UploadPage(): React.ReactElement {
               </div>
             )}
 
-            <div className="rounded-lg bg-white border border-gray-200 p-4 space-y-4">
+            <div className="rounded-lg bg-surface border border-border p-4 sm:p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-fg mb-1">
+                  Title <span className="text-danger">*</span>
                 </label>
                 <input
                   type="text"
@@ -88,13 +105,13 @@ export default function UploadPage(): React.ReactElement {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, title: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-page text-fg placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-[border-color,box-shadow] duration-150"
                   placeholder="Video title"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-fg mb-1">
                   Description
                 </label>
                 <textarea
@@ -103,12 +120,12 @@ export default function UploadPage(): React.ReactElement {
                     setFormData((prev) => ({ ...prev, description: e.target.value }))
                   }
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-page text-fg placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-[border-color,box-shadow] duration-150"
                   placeholder="Optional"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-h-[44px]">
                 <input
                   id="upload-page-public"
                   type="checkbox"
@@ -116,16 +133,19 @@ export default function UploadPage(): React.ReactElement {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, isPublic: e.target.checked }))
                   }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-border text-primary focus:ring-primary"
                 />
-                <label htmlFor="upload-page-public" className="text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="upload-page-public"
+                  className="text-sm font-medium text-fg cursor-pointer"
+                >
                   Make publicly accessible
                 </label>
               </div>
 
               {formData.isPublic && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-fg mb-1">
                     Access
                   </label>
                   <select
@@ -136,7 +156,7 @@ export default function UploadPage(): React.ReactElement {
                         publicRole: e.target.value as 'viewer' | 'editor',
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-page text-fg focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
                   >
                     <option value="viewer">Viewer</option>
                     <option value="editor">Editor</option>
@@ -144,15 +164,21 @@ export default function UploadPage(): React.ReactElement {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <Button
                   type="button"
                   onClick={() => handleStartUpload()}
                   disabled={!formData.title.trim() || selectedFiles.length === 0}
+                  icon={<UploadIcon size={18} />}
                 >
                   Start upload
                 </Button>
-                <Button type="button" variant="outline" onClick={handleCancelForm}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCancelForm}
+                  icon={<X size={18} />}
+                >
                   Cancel
                 </Button>
               </div>
@@ -162,7 +188,7 @@ export default function UploadPage(): React.ReactElement {
 
         {uploads.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+            <h2 className="text-lg font-semibold text-fg mb-3">
               Upload queue ({uploads.length})
             </h2>
             <ul className="space-y-3">

@@ -1,28 +1,112 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Purplish dark theme + light accent (default)
+   Light theme toggle-ready via data-theme="light"
+   --------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0f0d14;
+  --foreground: #f5f3ff;
+  /* Purplish dark surfaces */
+  --bg-page: #0c0a12;
+  --bg-surface: #15121d;
+  --bg-elevated: #1e1a28;
+  --fg: #f5f3ff;
+  --fg-muted: #9d99b0;
+  --border: #2d2a3d;
+  --border-subtle: #252230;
+  /* Primary: vibrant violet (main accent) */
+  --primary: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --primary-ring: rgba(139, 92, 246, 0.45);
+  /* Light accent for highlights, hover glow, secondary emphasis */
+  --accent: #c4b5fd;
+  --accent-subtle: rgba(196, 181, 253, 0.15);
+  --danger: #f87171;
+  --danger-hover: #ef4444;
+  --danger-ring: rgba(248, 113, 113, 0.4);
+  --success: #34d399;
+  --error: #f87171;
+  --warning: #fbbf24;
+  --info: #818cf8;
+}
+
+[data-theme="light"] {
+  --background: #faf5ff;
+  --foreground: #1e1b2e;
+  --bg-page: #f5f0ff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --fg: #1e1b2e;
+  --fg-muted: #6b6580;
+  --border: #e9e3f5;
+  --border-subtle: #f0ebf8;
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-ring: rgba(124, 58, 237, 0.35);
+  --accent: #6d28d9;
+  --accent-subtle: rgba(124, 58, 237, 0.12);
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-ring: rgba(220, 38, 38, 0.3);
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #ca8a04;
+  --info: #6366f1;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-page: var(--bg-page);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-enter: 300ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-page);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Accent glow for interactive elements (optional use) */
+.accent-glow {
+  box-shadow: 0 0 0 1px var(--border), 0 0 20px -5px var(--accent-subtle);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes toast-in {
@@ -36,6 +120,14 @@ body {
   }
 }
 
+.animate-fade-in {
+  animation: fade-in var(--duration-enter) var(--ease-out) forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up var(--duration-enter) var(--ease-out) forwards;
+}
+
 .toast-enter {
-  animation: toast-in 0.2s ease-out forwards;
+  animation: toast-in var(--duration-normal) var(--ease-out) forwards;
 }

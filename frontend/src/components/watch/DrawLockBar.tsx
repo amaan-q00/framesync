@@ -23,8 +23,8 @@ export function DrawLockBar({
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-500 px-2 py-1">
-        <Lock size={14} />
+      <div className="flex items-center gap-2 text-xs text-fg-muted px-2 py-1">
+        <Lock size={14} aria-hidden />
         Sign in to draw
       </div>
     );
@@ -32,8 +32,8 @@ export function DrawLockBar({
 
   if (lockedBy && !iHaveLock) {
     return (
-      <div className="flex items-center gap-2 text-xs text-amber-400 px-2 py-1">
-        <Lock size={14} />
+      <div className="flex items-center gap-2 text-xs text-warning px-2 py-1">
+        <Lock size={14} aria-hidden />
         Locked by {lockedBy}
       </div>
     );
@@ -42,16 +42,16 @@ export function DrawLockBar({
   if (iHaveLock) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-green-400 flex items-center gap-1">
-          <Pencil size={14} />
+        <span className="text-xs text-success flex items-center gap-1">
+          <Pencil size={14} aria-hidden />
           You are drawing
         </span>
         <button
           type="button"
           onClick={onReleaseLock}
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs bg-gray-700 text-white hover:bg-gray-600"
+          className="flex items-center gap-1 rounded px-2 py-1.5 min-h-[36px] text-xs bg-elevated border border-border text-fg hover:bg-surface transition-colors duration-150"
         >
-          <Unlock size={14} />
+          <Unlock size={14} aria-hidden />
           Release lock
         </button>
       </div>
@@ -62,9 +62,9 @@ export function DrawLockBar({
     <button
       type="button"
       onClick={onRequestLock}
-      className="flex items-center gap-1.5 rounded px-2 py-1 text-xs bg-gray-700 text-white hover:bg-gray-600"
+      className="flex items-center gap-1.5 rounded px-2 py-1.5 min-h-[36px] text-xs bg-elevated border border-border text-fg hover:bg-surface transition-colors duration-150"
     >
-      <Pencil size={14} />
+      <Pencil size={14} aria-hidden />
       Request draw lock
     </button>
   );

@@ -51,23 +51,23 @@ export function VideoControlBar({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-3 rounded-lg bg-gray-800/90 px-3 py-2 ${className}`}
+      className={`flex flex-wrap items-center gap-3 rounded-lg bg-surface border border-border px-3 py-2 ${className}`}
       aria-label="Video controls"
     >
       <button
         type="button"
         onClick={isPlaying ? onPause : onPlay}
         disabled={disabled}
-        className="rounded p-1.5 text-white hover:bg-gray-700 disabled:opacity-50"
+        className="rounded p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-fg hover:bg-elevated disabled:opacity-50 transition-colors duration-150"
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
-        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        {isPlaying ? <Pause size={20} aria-hidden /> : <Play size={20} aria-hidden />}
       </button>
 
-      <span className="text-sm text-gray-300 tabular-nums">
+      <span className="text-sm text-fg tabular-nums">
         {formatTime(currentTime)} / {formatTime(duration)}
       </span>
-      <span className="text-xs text-gray-400 tabular-nums" title="Current frame / total frames">
+      <span className="text-xs text-fg-muted tabular-nums" title="Current frame / total frames">
         Frame {currentFrame} / {maxFrame}
       </span>
 
@@ -79,18 +79,18 @@ export function VideoControlBar({
           value={seekPercent}
           onChange={handleSeekSlider}
           disabled={disabled}
-          className="w-full h-1.5 rounded accent-blue-500 disabled:opacity-50"
+          className="w-full h-1.5 rounded accent-primary disabled:opacity-50"
           aria-label="Seek"
         />
       </div>
 
       <div className="flex items-center gap-1">
-        <span className="text-xs text-gray-400">Frame</span>
+        <span className="text-xs text-fg-muted">Frame</span>
         <button
           type="button"
           onClick={() => skipFrames(-10)}
           disabled={disabled || currentFrame <= 0}
-          className="rounded px-1.5 py-0.5 text-xs bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 font-medium"
+          className="rounded px-2 py-1.5 min-h-[36px] text-xs bg-elevated text-fg hover:bg-border disabled:opacity-50 font-medium transition-colors duration-150"
           aria-label="Back 10 frames"
           title="Back 10 frames"
         >
@@ -100,7 +100,7 @@ export function VideoControlBar({
           type="button"
           onClick={() => skipFrames(-1)}
           disabled={disabled || currentFrame <= 0}
-          className="rounded px-1.5 py-0.5 text-xs bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50"
+          className="rounded px-2 py-1.5 min-h-[36px] text-xs bg-elevated text-fg hover:bg-border disabled:opacity-50 transition-colors duration-150"
           aria-label="Previous frame"
           title="Back 1 frame"
         >
@@ -110,7 +110,7 @@ export function VideoControlBar({
           type="button"
           onClick={() => skipFrames(1)}
           disabled={disabled || currentFrame >= maxFrame}
-          className="rounded px-1.5 py-0.5 text-xs bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50"
+          className="rounded px-2 py-1.5 min-h-[36px] text-xs bg-elevated text-fg hover:bg-border disabled:opacity-50 transition-colors duration-150"
           aria-label="Next frame"
           title="Forward 1 frame"
         >
@@ -120,7 +120,7 @@ export function VideoControlBar({
           type="button"
           onClick={() => skipFrames(10)}
           disabled={disabled || currentFrame >= maxFrame}
-          className="rounded px-1.5 py-0.5 text-xs bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 font-medium"
+          className="rounded px-2 py-1.5 min-h-[36px] text-xs bg-elevated text-fg hover:bg-border disabled:opacity-50 font-medium transition-colors duration-150"
           aria-label="Forward 10 frames"
           title="Forward 10 frames"
         >

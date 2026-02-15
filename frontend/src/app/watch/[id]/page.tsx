@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import AppLogo from '@/components/ui/AppLogo';
 import { useDashboardSync } from '@/contexts/DashboardSyncContext';
 import { videoApi } from '@/lib/api';
 import { useToast } from '@/hooks/useToast';
@@ -17,6 +18,7 @@ import { DrawLockBar } from '@/components/watch/DrawLockBar';
 import { DrawingCanvas } from '@/components/watch/DrawingCanvas';
 import { CursorsOverlay } from '@/components/watch/CursorsOverlay';
 import { ActivityBar } from '@/components/watch/ActivityBar';
+import { ArrowLeft, Radio, Square, UserMinus, UserPlus, UserCheck, LogOut } from 'lucide-react';
 
 const SYNC_PULSE_INTERVAL_MS = 500;
 const CURSOR_THROTTLE_MS = 100;
@@ -535,17 +537,17 @@ export default function WatchPage(): React.ReactElement {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white">Loading…</div>
+      <div className="min-h-screen bg-page flex items-center justify-center animate-fade-in">
+        <div className="text-fg">Loading…</div>
       </div>
     );
   }
 
   if (!video) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 text-white">
+      <div className="min-h-screen bg-page flex flex-col items-center justify-center gap-4 text-fg px-4 animate-fade-in">
         <p>Video not found or you don&apos;t have access.</p>
-        <Link href={backHref} className="text-blue-400 hover:underline">
+        <Link href={backHref} className="text-primary hover:opacity-90 transition-opacity">
           {backLabel}
         </Link>
       </div>
@@ -553,14 +555,27 @@ export default function WatchPage(): React.ReactElement {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-700 bg-gray-900/95 px-4 py-2 flex-wrap gap-2">
-        <Link href={backHref} className="text-sm text-gray-400 hover:text-white">
-          ← {backLabel}
-        </Link>
-        <h1 className="truncate text-lg font-medium text-white max-w-md">{video.title}</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500 capitalize">{video.role}</span>
+    <div className="min-h-screen bg-page">
+      <div className="sticky top-0 z-10 border-b border-border bg-elevated/95 backdrop-blur-sm px-4 py-2 sm:py-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+            <Link
+              href={backHref}
+              className="flex items-center gap-1.5 rounded-md py-2 pr-2 -ml-1 text-fg-muted hover:text-accent hover:bg-elevated transition-colors duration-150 shrink-0"
+              aria-label={`Back to ${backLabel}`}
+            >
+              <ArrowLeft size={20} strokeWidth={2} aria-hidden />
+              <span className="text-sm font-medium hidden sm:inline whitespace-nowrap">{backLabel}</span>
+            </Link>
+            <span className="h-5 w-px bg-border shrink-0" aria-hidden />
+            <AppLogo href={isAuthenticated ? '/dashboard' : '/'} iconSize={20} className="shrink-0" />
+            <span className="h-5 w-px bg-border shrink-0 hidden sm:inline" aria-hidden />
+            <h1 className="truncate text-base sm:text-lg font-semibold text-fg min-w-0" title={video.title}>
+              {video.title}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap min-w-0 sm:shrink-0">
+            <span className="text-xs text-fg-muted capitalize shrink-0">{video.role}</span>
           {(isAuthenticated || video?.isPublicAccess) && (
             <>
               {syncState.isLive && isHost && (
@@ -569,24 +584,27 @@ export default function WatchPage(): React.ReactElement {
                     <button
                       type="button"
                       onClick={releaseHost}
-                      className="rounded px-2 py-1 text-xs bg-amber-600/80 text-white hover:bg-amber-500"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-primary text-white hover:opacity-90 transition-opacity"
                     >
+                      <UserCheck size={14} aria-hidden />
                       Hand over to {syncState.pendingHostRequest.userName}
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={releaseHost}
-                      className="rounded px-2 py-1 text-xs bg-gray-600/80 text-white hover:bg-gray-500"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-surface border border-border text-fg hover:bg-elevated transition-colors duration-150"
                     >
+                      <UserMinus size={14} aria-hidden />
                       Release host
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={endSession}
-                    className="rounded px-2 py-1 text-xs bg-red-600/80 text-white hover:bg-red-500"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-danger text-white hover:opacity-90 transition-opacity"
                   >
+                    <Square size={14} aria-hidden />
                     End session
                   </button>
                 </div>
@@ -595,27 +613,30 @@ export default function WatchPage(): React.ReactElement {
                 <button
                   type="button"
                   onClick={() => setUserHasJoinedLive(true)}
-                  className="rounded px-2 py-1 text-xs bg-green-600 text-white hover:bg-green-500"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-success text-white hover:opacity-90 transition-opacity"
                 >
+                  <Radio size={14} aria-hidden />
                   Join live · {syncState.hostName}
                 </button>
               )}
               {syncState.isLive && !isHost && syncState.hostName && userHasJoinedLive && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-gray-400">Watching live · {syncState.hostName}</span>
+                  <span className="text-xs text-fg-muted">Watching live · {syncState.hostName}</span>
                   <button
                     type="button"
                     onClick={() => setUserHasJoinedLive(false)}
-                    className="rounded px-2 py-1 text-xs bg-gray-600 text-white hover:bg-gray-500"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-surface border border-border text-fg hover:bg-elevated transition-colors duration-150"
                   >
+                    <LogOut size={14} aria-hidden />
                     Leave live
                   </button>
                   {canEdit && (
                     <button
                       type="button"
                       onClick={requestBecomeHost}
-                      className="rounded px-2 py-1 text-xs bg-amber-600/80 text-white hover:bg-amber-500"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-primary text-white hover:opacity-90 transition-opacity"
                     >
+                      <UserPlus size={14} aria-hidden />
                       Request host
                     </button>
                   )}
@@ -625,20 +646,22 @@ export default function WatchPage(): React.ReactElement {
                 <button
                   type="button"
                   onClick={claimHost}
-                  className="rounded px-2 py-1 text-xs bg-green-600 text-white hover:bg-green-500"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 min-h-[36px] text-xs bg-success text-white hover:opacity-90 transition-opacity"
                 >
+                  <Radio size={14} aria-hidden />
                   Go live
                 </button>
               )}
               {!syncState.isLive && !canEdit && (
-                <span className="text-xs text-gray-500">Only editors can go live</span>
+                <span className="text-xs text-fg-muted">Only editors can go live</span>
               )}
             </>
           )}
         </div>
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-7xl mx-auto">
+      <div className="flex flex-col lg:flex-row gap-4 p-4 sm:p-6 max-w-7xl mx-auto">
         <div className="flex-1 flex flex-col gap-2 min-w-0">
           {isInLiveSession && <ActivityBar entries={activityEntries} className="shrink-0" />}
           <div
@@ -662,7 +685,7 @@ export default function WatchPage(): React.ReactElement {
                 onPause={handlePause}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500">
+              <div className="w-full h-full flex items-center justify-center text-fg-muted">
                 No playable stream available yet.
               </div>
             )}
@@ -698,18 +721,18 @@ export default function WatchPage(): React.ReactElement {
               disabled={isLiveMode && isPassenger}
             />
           )}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-4 overflow-hidden min-h-[52px]">
             {canDoEphemeral && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Pen:</span>
-                <div className="flex gap-1">
+              <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                <span className="text-xs text-fg-muted shrink-0">Pen:</span>
+                <div className="flex gap-1.5 overflow-x-auto overflow-y-hidden py-1">
                   {PEN_COLORS.map((color) => (
                     <button
                       key={color}
                       type="button"
                       onClick={() => setStrokeColor(color)}
-                      className={`w-6 h-6 rounded-full border-2 hover:border-white focus:outline-none focus:ring-2 focus:ring-white ${
-                        strokeColor === color ? 'border-white ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'border-gray-600'
+                      className={`shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center hover:border-fg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-page transition-shadow ${
+                        strokeColor === color ? 'border-fg ring-2 ring-primary ring-offset-2 ring-offset-page' : 'border-border'
                       }`}
                       style={{ backgroundColor: color }}
                       title={color}
@@ -720,16 +743,16 @@ export default function WatchPage(): React.ReactElement {
               </div>
             )}
             {markerMode && canEdit && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Marker pen:</span>
-                <div className="flex gap-1">
+              <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                <span className="text-xs text-fg-muted shrink-0">Marker pen:</span>
+                <div className="flex gap-1.5 overflow-x-auto overflow-y-hidden py-1">
                   {PEN_COLORS.map((color) => (
                     <button
                       key={color}
                       type="button"
                       onClick={() => setStrokeColor(color)}
-                      className={`w-6 h-6 rounded-full border-2 hover:border-white focus:outline-none focus:ring-2 focus:ring-white ${
-                        strokeColor === color ? 'border-white ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'border-gray-600'
+                      className={`shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center hover:border-fg focus:outline-none focus:ring-2 focus:ring-primary ${
+                        strokeColor === color ? 'border-fg ring-2 ring-primary ring-offset-2 ring-offset-page' : 'border-border'
                       }`}
                       style={{ backgroundColor: color }}
                       title={color}
@@ -742,7 +765,7 @@ export default function WatchPage(): React.ReactElement {
           </div>
         </div>
 
-        <aside className="w-full lg:w-80 flex-shrink-0 h-[320px] lg:h-[400px]">
+        <aside className="w-full lg:w-80 flex-shrink-0 h-[320px] lg:h-[400px] min-h-0">
           <CommentsPanel
             videoId={id}
             token={token}
