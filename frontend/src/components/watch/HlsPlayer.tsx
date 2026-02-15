@@ -23,6 +23,10 @@ export interface HlsPlayerProps {
   onTimeUpdate?: (time: number) => void;
   onPlay?: () => void;
   onPause?: () => void;
+  /** Called when manifest or playback fails fatally (e.g. 404). Parent can show "Processing..." and retry. */
+  onFatalError?: () => void;
+  /** Called when manifest has been parsed successfully. Parent can clear "Processing..." state. */
+  onManifestParsed?: () => void;
 }
 
 function HlsPlayerInner(
@@ -35,6 +39,8 @@ function HlsPlayerInner(
     onTimeUpdate,
     onPlay,
     onPause,
+    onFatalError,
+    onManifestParsed,
   }: HlsPlayerProps,
   ref: React.Ref<HlsPlayerControlRef | null>
 ): React.ReactElement {
@@ -42,6 +48,10 @@ function HlsPlayerInner(
   const hlsRef = useRef<Hls | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lastAppliedSyncTimeRef = useRef<number>(-1);
+  const onFatalErrorRef = useRef(onFatalError);
+  const onManifestParsedRef = useRef(onManifestParsed);
+  onFatalErrorRef.current = onFatalError;
+  onManifestParsedRef.current = onManifestParsed;
 
   useImperativeHandle(
     ref,
@@ -72,9 +82,15 @@ function HlsPlayerInner(
       (video.canPlayType('application/x-mpegURL') !== '' && !Hls.isSupported());
 
     if (Hls.isSupported()) {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
+        xhrSetup: (xhr, url) => {
+          if (url.startsWith(apiBase)) {
+            xhr.withCredentials = true;
+          }
+        },
       });
       hlsRef.current = hls;
 
@@ -83,6 +99,7 @@ function HlsPlayerInner(
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setError(null);
+        onManifestParsedRef.current?.();
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -90,6 +107,7 @@ function HlsPlayerInner(
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               setError('Network error loading video. Retrying…');
+              onFatalErrorRef.current?.();
               hls.startLoad();
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
@@ -98,6 +116,7 @@ function HlsPlayerInner(
               break;
             default:
               setError('Playback error.');
+              onFatalErrorRef.current?.();
               hls.destroy();
           }
         }

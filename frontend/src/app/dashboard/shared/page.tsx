@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { useDashboardSync } from '@/contexts/DashboardSyncContext';
 import { getErrorMessage } from '@/lib/utils';
 import type { SharedWithMeVideo } from '@/types/video';
-import { ChevronLeft, ChevronRight, Users, ArrowLeft, Share2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, ArrowLeft, Share2, Search } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
@@ -19,16 +19,19 @@ export default function DashboardSharedPage(): React.ReactElement {
   const [videos, setVideos] = useState<SharedWithMeVideo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(true);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const fetchPage = async (p: number) => {
+  const fetchPage = async (p: number, searchTerm?: string) => {
     setLoading(true);
     try {
       const res = await videoApi.getSharedWithMe({
         limit: PAGE_SIZE,
         offset: (p - 1) * PAGE_SIZE,
+        search: searchTerm !== undefined ? searchTerm : search || undefined,
       });
       setVideos(res.data);
       setTotal(res.total);
@@ -46,20 +49,26 @@ export default function DashboardSharedPage(): React.ReactElement {
 
   useEffect(() => {
     fetchPage(page);
-  }, [page]);
+  }, [page, search]);
 
   useEffect(() => {
-    const refetch = () => fetchPageRef.current(pageRef.current);
+    const refetch = () => fetchPageRef.current(pageRef.current, search);
     const unsub = subscribeRefetchShared(refetch);
     return unsub;
-  }, [subscribeRefetchShared]);
+  }, [subscribeRefetchShared, search]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  };
 
   const handleRemoveMyAccess = async (videoId: string) => {
     if (!confirm('Remove your access to this video?')) return;
     try {
       await videoApi.removeMyAccess(videoId);
       success('Access removed');
-      await fetchPage(page);
+      await fetchPage(page, search);
     } catch (err) {
       showError(getErrorMessage(err));
     }
@@ -70,20 +79,48 @@ export default function DashboardSharedPage(): React.ReactElement {
       <DashboardNav />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-fg">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-              <Users size={22} className="shrink-0" aria-hidden />
-            </span>
-            Shared with me
-          </h1>
-          <AppLink
+        <div className="mb-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-fg">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Users size={22} className="shrink-0" aria-hidden />
+              </span>
+              Shared with me
+            </h1>
+            <AppLink
             href="/dashboard"
             className="flex items-center gap-1.5 text-sm text-fg-muted hover:text-accent w-fit min-h-[44px] items-center transition-colors duration-150"
           >
             <ArrowLeft size={18} aria-hidden />
             Dashboard
           </AppLink>
+          </div>
+          <form onSubmit={handleSearchSubmit} className="flex gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-fg-muted pointer-events-none" aria-hidden />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSearchInput(v);
+                  if (!v.trim()) {
+                    setSearch('');
+                    setPage(1);
+                  }
+                }}
+                placeholder="Search by title"
+                className="w-full rounded-lg border border-border bg-surface text-fg pl-9 pr-3 py-2.5 text-sm placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[44px]"
+                aria-label="Search videos by title"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-lg bg-primary text-white px-4 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Search
+            </button>
+          </form>
         </div>
 
         {loading ? (

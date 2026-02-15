@@ -46,6 +46,8 @@ export function VideoCard({
   const statusLabel = STATUS_LABELS[video.status] ?? video.status;
   const isShared = !isOwner && 'owner_name' in video;
   const isReady = video.status === 'ready';
+  const isProcessing = video.status === 'processing';
+  const isWatchable = isReady || isProcessing;
 
   const thumbnailContent = (
     <>
@@ -60,7 +62,7 @@ export function VideoCard({
           <Video size={28} strokeWidth={1.5} aria-hidden />
         </div>
       )}
-      {!isReady && (
+      {!isWatchable && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-t-lg">
           <Lock size={24} className="text-white/90" aria-hidden />
         </div>
@@ -71,7 +73,7 @@ export function VideoCard({
   const titleContent = (
     <h3
       className={`truncate font-medium transition-colors duration-150 ${
-        isReady
+        isWatchable
           ? 'text-fg hover:text-accent'
           : 'text-fg-muted cursor-default'
       }`}
@@ -81,16 +83,16 @@ export function VideoCard({
   );
 
   const handleCardClick = () => {
-    if (isReady) router.push(`/watch/${video.id}`);
+    if (isWatchable) router.push(`/watch/${video.id}`);
   };
 
   return (
     <div
-      role={isReady ? 'button' : undefined}
-      tabIndex={isReady ? 0 : undefined}
-      onClick={isReady ? handleCardClick : undefined}
+      role={isWatchable ? 'button' : undefined}
+      tabIndex={isWatchable ? 0 : undefined}
+      onClick={isWatchable ? handleCardClick : undefined}
       onKeyDown={
-        isReady
+        isWatchable
           ? (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -100,7 +102,7 @@ export function VideoCard({
           : undefined
       }
       className={`group relative rounded-lg border border-border bg-surface overflow-visible transition-all duration-200 ${
-        isReady
+        isWatchable
           ? 'cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5'
           : ''
       }`}
@@ -124,14 +126,19 @@ export function VideoCard({
                 <span className="truncate">by {video.owner_name}</span>
               )}
             </div>
-            {!isReady && (
+            {!isReady && !isProcessing && (
               <p className="mt-1.5 text-xs text-fg-muted">
                 Delete and share available when ready.
               </p>
             )}
+            {isProcessing && (
+              <p className="mt-1.5 text-xs text-fg-muted">
+                Stream will grow as processing continues. You can share or watch now.
+              </p>
+            )}
           </div>
 
-          {isReady && (
+          {(isReady || isProcessing) && (
             <div
               className="relative shrink-0"
               onClick={(e) => e.stopPropagation()}

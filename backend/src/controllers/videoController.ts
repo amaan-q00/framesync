@@ -57,22 +57,26 @@ const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: 
 
 // --- READ ROUTES ---
 
-// GET /api/videos/my-works?limit=5&offset=0
+// GET /api/videos/my-works?limit=5&offset=0&search=...
 export const getMyWorks = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const titleFilter = search ? `AND title ILIKE $2` : '';
+    const countParams = search ? [req.user?.userId, `%${search}%`] : [req.user?.userId];
+    const listParams = search ? [req.user?.userId, `%${search}%`, limit, offset] : [req.user?.userId, limit, offset];
 
     const countResult = await pool.query(
-      'SELECT COUNT(*)::int AS total FROM videos WHERE user_id = $1',
-      [req.user?.userId]
+      `SELECT COUNT(*)::int AS total FROM videos WHERE user_id = $1 ${titleFilter}`,
+      countParams
     );
     const total = countResult.rows[0]?.total ?? 0;
 
     const result = await pool.query(
       `SELECT id, title, thumbnail_path, status, views, created_at, is_public, public_token, public_role 
-       FROM videos WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [req.user?.userId, limit, offset]
+       FROM videos WHERE user_id = $1 ${titleFilter} ORDER BY created_at DESC LIMIT ${search ? '$3' : '$2'} OFFSET ${search ? '$4' : '$3'}`,
+      listParams
     );
     const storageHost = env.NODE_ENV === 'development' ? 'http://127.0.0.1:9000' : env.S3_ENDPOINT;
     const data = result.rows.map((row: { thumbnail_path?: string | null; [k: string]: unknown }) => ({
@@ -85,15 +89,19 @@ export const getMyWorks = async (req: AuthRequest, res: Response, next: NextFunc
   }
 };
 
-// GET /api/videos/shared-with-me?limit=5&offset=0
+// GET /api/videos/shared-with-me?limit=5&offset=0&search=...
 export const getSharedWithMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const titleFilter = search ? `AND v.title ILIKE $2` : '';
+    const countParams = search ? [req.user?.userId, `%${search}%`] : [req.user?.userId];
+    const listParams = search ? [req.user?.userId, `%${search}%`, limit, offset] : [req.user?.userId, limit, offset];
 
     const countResult = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM video_shares vs WHERE vs.user_id = $1`,
-      [req.user?.userId]
+      `SELECT COUNT(*)::int AS total FROM video_shares vs JOIN videos v ON vs.video_id = v.id WHERE vs.user_id = $1 ${titleFilter}`,
+      countParams
     );
     const total = countResult.rows[0]?.total ?? 0;
 
@@ -102,9 +110,9 @@ export const getSharedWithMe = async (req: AuthRequest, res: Response, next: Nex
        FROM video_shares vs
        JOIN videos v ON vs.video_id = v.id
        JOIN users u ON v.user_id = u.id
-       WHERE vs.user_id = $1
-       ORDER BY vs.created_at DESC LIMIT $2 OFFSET $3`,
-      [req.user?.userId, limit, offset]
+       WHERE vs.user_id = $1 ${titleFilter}
+       ORDER BY vs.created_at DESC LIMIT ${search ? '$3' : '$2'} OFFSET ${search ? '$4' : '$3'}`,
+      listParams
     );
     const storageHost = env.NODE_ENV === 'development' ? 'http://127.0.0.1:9000' : env.S3_ENDPOINT;
     const data = result.rows.map((row: { thumbnail_path?: string | null; [k: string]: unknown }) => ({
@@ -112,6 +120,77 @@ export const getSharedWithMe = async (req: AuthRequest, res: Response, next: Nex
       thumbnail_url: row.thumbnail_path ? `${storageHost}/${BUCKET_NAME}/${row.thumbnail_path}` : null,
     }));
     res.status(200).json({ status: 'success', data, total });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const HLS_SEGMENT_DURATION = 10; // matches worker -hls_time 10
+const MIN_SEGMENTS_FOR_PLAYABLE = 1; // only expose manifest when at least this many chunks exist
+
+/** Returns sorted .ts segment keys for a video (empty if none). */
+async function listSegmentKeys(videoId: string): Promise<string[]> {
+  const prefix = `videos/${videoId}/`;
+  const listResult = await s3.send(new ListObjectsV2Command({
+    Bucket: BUCKET_NAME,
+    Prefix: prefix,
+  }));
+  const contents = listResult.Contents ?? [];
+  return contents
+    .filter((o): o is { Key: string } => (o.Key?.endsWith('.ts') ?? false))
+    .map((o) => o.Key)
+    .sort();
+}
+
+// GET /api/videos/:id/manifest.m3u8 (Progressive HLS playlist)
+export const getManifest = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const { id } = req.params as { id: string };
+  const { token } = req.query as { token?: string };
+
+  try {
+    const { access, video } = await checkVideoAccess(id, req.user?.userId, token);
+    if (!access || !video) {
+      return next(new AppError('Access Denied or Video Not Found', 403));
+    }
+
+    const segmentKeys = await listSegmentKeys(id);
+
+    if (segmentKeys.length === 0) {
+      return res.status(404).set({ 'Cache-Control': 'no-cache' }).end();
+    }
+
+    const storageHost = env.NODE_ENV === 'development'
+      ? 'http://127.0.0.1:9000'
+      : env.S3_ENDPOINT;
+    const baseUrl = `${storageHost}/${BUCKET_NAME}/`;
+
+    const lines: string[] = [
+      '#EXTM3U',
+      '#EXT-X-VERSION:3',
+      '#EXT-X-PLAYLIST-TYPE:VOD',
+      `#EXT-X-TARGETDURATION:${HLS_SEGMENT_DURATION + 1}`,
+    ];
+
+    for (let i = 0; i < segmentKeys.length; i++) {
+      const key = segmentKeys[i];
+      const isLast = i === segmentKeys.length - 1;
+      const duration = isLast ? HLS_SEGMENT_DURATION : HLS_SEGMENT_DURATION;
+      lines.push(`#EXTINF:${duration.toFixed(3)},`);
+      lines.push(baseUrl + key);
+    }
+
+    if (video.status === 'ready') {
+      lines.push('#EXT-X-ENDLIST');
+    }
+
+    const body = lines.join('\n') + '\n';
+    res
+      .status(200)
+      .set({
+        'Content-Type': 'application/vnd.apple.mpegurl',
+        'Cache-Control': 'no-cache',
+      })
+      .send(body);
   } catch (error) {
     next(error);
   }
@@ -134,11 +213,18 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
       console.error(`Redis View Incr Failed for ${id}`, err)
   );
 
-    const storageHost = env.NODE_ENV === 'development' 
-      ? 'http://127.0.0.1:9000' 
-      : env.S3_ENDPOINT;
-      
-    const manifestUrl = `${storageHost}/${BUCKET_NAME}/${video.bucket_path}`;
+    const apiHost = env.API_URL || `http://localhost:${env.PORT}`;
+    const manifestPath = `${apiHost}/api/videos/${id}/manifest.m3u8`;
+    let playable = video.status === 'ready';
+    if (video.status === 'processing') {
+      const segmentKeys = await listSegmentKeys(id);
+      playable = segmentKeys.length >= MIN_SEGMENTS_FOR_PLAYABLE;
+    }
+    const manifestUrl = playable
+      ? isPublicAccess && token
+        ? `${manifestPath}?token=${encodeURIComponent(token)}`
+        : manifestPath
+      : undefined;
 
     res.status(200).json({
       status: 'success',

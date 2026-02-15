@@ -109,14 +109,25 @@ const processVideo = async (job: Job) => {
   const uploadedSegments = new Set<string>();
 
   try {
+    await pool.query("UPDATE videos SET status = 'processing' WHERE id = $1", [videoId]);
+
     // 1. Get Input Stream URL
     const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: bucketPath });
     const inputUrl = await getSignedUrl(s3, command, { expiresIn: 7200 });
 
     // 2. One ffprobe for metadata (no decode)
     const { fps, duration } = await probeVideo(inputUrl);
+    await pool.query(
+      'UPDATE videos SET fps = $1, duration = $2 WHERE id = $3',
+      [fps, duration, videoId]
+    );
 
-    // 3. Upload poller: stream .ts segments to S3 as they appear
+    // 3. Upload poller: stream .ts segments to S3 as they appear.
+    // Upload when a file's mtime has been unchanged for STABLE_MS (treat as complete). Safe because
+    // ffmpeg writes each segment in one go and closes it; we avoid uploading the in-progress segment.
+    // Trade-off: if a segment were written over >STABLE_MS (very rare), we could upload partial
+    // data; 2s is a conservative margin. Final cleanup (step 5) still uploads any remaining files.
+    const STABLE_MS = 2000;
     const uploaderInterval = setInterval(async () => {
       try {
         const files = await readdir(videoDir);
@@ -126,10 +137,10 @@ const processVideo = async (job: Job) => {
           return { file, mtime: stats.mtime.getTime() };
         });
         const fileStats = await Promise.all(statsPromises);
-        fileStats.sort((a, b) => a.mtime - b.mtime);
-        const safeFiles = fileStats.slice(0, -1);
-        for (const { file } of safeFiles) {
+        const now = Date.now();
+        for (const { file, mtime } of fileStats) {
           if (uploadedSegments.has(file)) continue;
+          if (now - mtime < STABLE_MS) continue;
           const filePath = path.join(videoDir, file);
           const s3Key = `videos/${videoId}/${file}`;
           await uploadFile(filePath, s3Key, 'video/MP2T');

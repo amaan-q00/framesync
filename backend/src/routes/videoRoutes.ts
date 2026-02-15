@@ -6,6 +6,7 @@ import {
   getMyWorks,
   getSharedWithMe,
   getVideo,
+  getManifest,
   shareVideo,
   removeShare,
   removeMyShare,
@@ -32,6 +33,7 @@ router.get('/my-works', protect, getMyWorks);
 router.get('/shared-with-me', protect, getSharedWithMe);
 
 // --- WATCHING ---
+router.get('/:id/manifest.m3u8', optionalAuth, getManifest);
 router.get('/:id', optionalAuth, getVideo);
 
 // --- SHARING & ACCESS ---

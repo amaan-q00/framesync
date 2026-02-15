@@ -227,7 +227,7 @@ export function UploadPopup({ isOpen, onClose }: UploadPopupProps): React.ReactE
                   type="button"
                   variant="outline"
                   onClick={handleCancelForm}
-                  icon={<ArrowLeft size={18} />}
+                  // icon={<ArrowLeft size={18} />}
                 >
                   Cancel
                 </Button>

@@ -49,6 +49,7 @@ export default function WatchPage(): React.ReactElement {
     role: string;
     fps: number;
     isPublicAccess?: boolean;
+    status?: string;
   } | null>(null);
   const [guestIsHost, setGuestIsHost] = useState(false);
   const [loading, setLoading] = useState(!!id);
@@ -58,6 +59,8 @@ export default function WatchPage(): React.ReactElement {
   const [markerSaving, setMarkerSaving] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [manifestLoadFailed, setManifestLoadFailed] = useState(false);
+  const [manifestRetryKey, setManifestRetryKey] = useState(0);
   const playerRef = useRef<HlsPlayerControlRef | null>(null);
   const lastSyncPulseRef = useRef(0);
   const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,8 +132,9 @@ export default function WatchPage(): React.ReactElement {
   isHostRef.current = Boolean(isHost);
   isLiveModeRef.current = Boolean(isLiveMode);
   const canEdit = video?.role === 'owner' || video?.role === 'editor';
-  const canAddComment = Boolean(video);
-  const canAddMarkers = (video?.role === 'owner' || video?.role === 'editor') && (!isLiveMode || isHost);
+  const isPlayable = Boolean(video?.manifestUrl);
+  const canAddComment = Boolean(video && isPlayable);
+  const canAddMarkers = (video?.role === 'owner' || video?.role === 'editor') && (!isLiveMode || isHost) && isPlayable;
   const canDoEphemeral = isInLiveSession && !video?.isPublicAccess;
   const iHaveLock = Boolean(
     isLiveMode &&
@@ -142,6 +146,22 @@ export default function WatchPage(): React.ReactElement {
 
   const backHref = isAuthenticated ? '/dashboard' : '/login';
   const backLabel = isAuthenticated ? 'Dashboard' : 'Sign in';
+
+  const onManifestFatalError = useCallback(() => setManifestLoadFailed(true), []);
+  const onManifestParsed = useCallback(() => setManifestLoadFailed(false), []);
+
+  useEffect(() => {
+    setManifestLoadFailed(false);
+    setManifestRetryKey(0);
+  }, [id, video?.manifestUrl]);
+
+  useEffect(() => {
+    if (!manifestLoadFailed || !video?.manifestUrl) return;
+    const interval = setInterval(() => {
+      setManifestRetryKey((k) => k + 1);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [manifestLoadFailed, video?.manifestUrl]);
 
   useEffect(() => {
     if (!id) {
@@ -159,6 +179,7 @@ export default function WatchPage(): React.ReactElement {
             role: res.data.role,
             fps: typeof res.data.fps === 'number' ? res.data.fps : 24,
             isPublicAccess: Boolean(res.data.isPublicAccess),
+            status: res.data.status,
           });
         }
       })
@@ -172,6 +193,28 @@ export default function WatchPage(): React.ReactElement {
       cancelled = true;
     };
   }, [id, token, showError]);
+
+  // Poll getVideo when we have no manifestUrl yet (uploading, queued, or processing with 0 segments)
+  // so we get manifestUrl once the first chunk exists or video is ready
+  useEffect(() => {
+    if (!id || !video || video.manifestUrl) return;
+    const status = video.status;
+    if (status !== 'uploading' && status !== 'queued' && status !== 'processing') return;
+    const interval = setInterval(() => {
+      videoApi.getVideo(id, token).then((res) => {
+        setVideo((prev) =>
+          prev
+            ? {
+                ...prev,
+                manifestUrl: res.data.manifestUrl,
+                status: res.data.status,
+              }
+            : prev
+        );
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [id, token, video?.status, video?.manifestUrl]);
 
   // When permission changes (access revoked or role changed), push user to dashboard
   const videoRoleRef = useRef<string | null>(null);
@@ -670,20 +713,32 @@ export default function WatchPage(): React.ReactElement {
             onMouseMove={handleMouseMove}
           >
             {video.manifestUrl ? (
-              <HlsPlayer
-                ref={playerRef}
-                manifestUrl={video.manifestUrl}
-                className="rounded-lg"
-                showNativeControls={false}
-                controlled={
-                  isLiveMode && isPassenger
-                    ? { syncTime: syncState.syncTime, syncPlaying: syncState.syncPlaying }
-                    : undefined
-                }
-                onTimeUpdate={handleTimeUpdate}
-                onPlay={handlePlay}
-                onPause={handlePause}
-              />
+              <>
+                <HlsPlayer
+                  key={manifestRetryKey}
+                  ref={playerRef}
+                  manifestUrl={video.manifestUrl}
+                  className="rounded-lg"
+                  showNativeControls={false}
+                  controlled={
+                    isLiveMode && isPassenger
+                      ? { syncTime: syncState.syncTime, syncPlaying: syncState.syncPlaying }
+                      : undefined
+                  }
+                  onTimeUpdate={handleTimeUpdate}
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onFatalError={onManifestFatalError}
+                  onManifestParsed={onManifestParsed}
+                />
+                {manifestLoadFailed && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-lg z-10">
+                    <p className="text-fg text-sm px-4 text-center">
+                      Processing… stream will appear shortly.
+                    </p>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-fg-muted">
                 No playable stream available yet.

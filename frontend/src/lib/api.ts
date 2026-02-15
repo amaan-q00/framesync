@@ -182,18 +182,20 @@ export const videoApi = {
     });
   },
 
-  getMyWorks: async (params?: { limit?: number; offset?: number }): Promise<{ status: string; data: MyWorkVideo[]; total: number }> => {
+  getMyWorks: async (params?: { limit?: number; offset?: number; search?: string }): Promise<{ status: string; data: MyWorkVideo[]; total: number }> => {
     const sp = new URLSearchParams();
     if (params?.limit != null) sp.set('limit', String(params.limit));
     if (params?.offset != null) sp.set('offset', String(params.offset));
+    if (params?.search?.trim()) sp.set('search', params.search.trim());
     const q = sp.toString();
     return apiRequest(`/videos/my-works${q ? `?${q}` : ''}`, { method: 'GET' });
   },
 
-  getSharedWithMe: async (params?: { limit?: number; offset?: number }): Promise<{ status: string; data: SharedWithMeVideo[]; total: number }> => {
+  getSharedWithMe: async (params?: { limit?: number; offset?: number; search?: string }): Promise<{ status: string; data: SharedWithMeVideo[]; total: number }> => {
     const sp = new URLSearchParams();
     if (params?.limit != null) sp.set('limit', String(params.limit));
     if (params?.offset != null) sp.set('offset', String(params.offset));
+    if (params?.search?.trim()) sp.set('search', params.search.trim());
     const q = sp.toString();
     return apiRequest(`/videos/shared-with-me${q ? `?${q}` : ''}`, { method: 'GET' });
   },
