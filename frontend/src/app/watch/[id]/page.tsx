@@ -611,7 +611,7 @@ export default function WatchPage(): React.ReactElement {
               <span className="text-sm font-medium hidden sm:inline whitespace-nowrap">{backLabel}</span>
             </Link>
             <span className="h-5 w-px bg-border shrink-0" aria-hidden />
-            <AppLogo href={isAuthenticated ? '/dashboard' : '/'} iconSize={20} className="shrink-0" />
+            <AppLogo href={isAuthenticated ? '/dashboard' : '/'} iconSize={26} className="shrink-0" />
             <span className="h-5 w-px bg-border shrink-0 hidden sm:inline" aria-hidden />
             <h1 className="truncate text-base sm:text-lg font-semibold text-fg min-w-0" title={video.title}>
               {video.title}

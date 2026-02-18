@@ -22,6 +22,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FrameSync",
   description: "Video synchronization platform",
+  icons: {
+    icon: [{ url: '/framesync-logo.svg', type: 'image/svg+xml' }],
+  },
 };
 
 export default function RootLayout({

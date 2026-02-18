@@ -2,9 +2,37 @@
 
 import React from 'react';
 import AppLink from '@/components/ui/AppLink';
-import { Film } from 'lucide-react';
 
-/** App logo: Film icon + FrameSync. Use in all headers. Links to /dashboard when href provided. */
+/** Same graphic as public/framesync-logo.svg – inlined so header always shows; favicon uses the file. */
+function LogoIcon({ size = 32 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="shrink-0 block"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="fs-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7C3AED" />
+          <stop offset="1" stopColor="#A78BFA" />
+        </linearGradient>
+      </defs>
+      <path
+        fill="url(#fs-logo-grad)"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M6 6h5v2H8v3H6V6zm20 0h-5v2h3v3h2V6zM26 26v-5h-2v3h-3v2h5zM6 26h5v-2H8v-3H6v5z"
+      />
+      <path fill="url(#fs-logo-grad)" d="M13 11v10l7-5-7-5z" />
+    </svg>
+  );
+}
+
+/** App logo: public/framesync-logo.svg for favicon; header uses inlined same graphic. Links to /dashboard when href provided. */
 export interface AppLogoProps {
   href?: string;
   className?: string;
@@ -15,12 +43,12 @@ export interface AppLogoProps {
 export function AppLogo({
   href = '/dashboard',
   className = '',
-  iconSize = 22,
+  iconSize = 32,
   showText = true,
 }: AppLogoProps): React.ReactElement {
   const content = (
     <>
-      <Film size={iconSize} className="shrink-0 text-primary" aria-hidden />
+      <LogoIcon size={iconSize} />
       {showText && <span>FrameSync</span>}
     </>
   );
