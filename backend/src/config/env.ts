@@ -7,7 +7,8 @@ const raw = cleanEnv(process.env, {
   // Ports (single source: change API_PORT/APP_PORT and URLs + docker ports follow)
   API_PORT: port({ default: 8000 }),
   APP_PORT: port({ default: 3000 }),
-  // Database (we build DATABASE_URL from these)
+  // Database: use DATABASE_URL when set (e.g. Neon), else build from POSTGRES_*
+  DATABASE_URL: str({ default: '' }),
   POSTGRES_HOST: str({ default: 'db' }),
   POSTGRES_USER: str({ default: 'postgres' }),
   POSTGRES_PASSWORD: str({ default: 'postgres' }),
@@ -37,6 +38,10 @@ const encode = (s: string) => encodeURIComponent(s);
 const apiBase = process.env.API_URL?.trim() || `http://localhost:${raw.API_PORT}`;
 const appBase = process.env.APP_URL?.trim() || `http://localhost:${raw.APP_PORT}`;
 
+const databaseUrl =
+  raw.DATABASE_URL?.trim() ||
+  `postgres://${encode(raw.POSTGRES_USER)}:${encode(raw.POSTGRES_PASSWORD)}@${raw.POSTGRES_HOST}:5432/${raw.POSTGRES_DB}`;
+
 export const env = {
   ...raw,
   PORT: raw.API_PORT,
@@ -44,5 +49,5 @@ export const env = {
   APP_URL: appBase,
   FRONTEND_URL: appBase,
   BACKEND_PUBLIC_URL: apiBase,
-  DATABASE_URL: `postgres://${encode(raw.POSTGRES_USER)}:${encode(raw.POSTGRES_PASSWORD)}@${raw.POSTGRES_HOST}:5432/${raw.POSTGRES_DB}`,
+  DATABASE_URL: databaseUrl,
 };
