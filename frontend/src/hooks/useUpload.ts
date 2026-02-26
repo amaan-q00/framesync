@@ -64,22 +64,27 @@ export function useUpload(options?: UseUploadOptions) {
     async (
       videoId: string,
       chunk: UploadChunk,
-      signedUrl: string,
+      key: string,
+      uploadId: string,
       file: File,
       signal: AbortSignal
     ): Promise<{ etag: string; partNumber: number }> => {
       const blob = file.slice(chunk.start, chunk.end);
-      const response = await fetch(signedUrl, {
-        method: 'PUT',
-        body: blob,
-        signal,
-      });
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+      console.log('[uploadPart] start', { videoId, partNumber: chunk.partNumber, size: blob.size });
+      try {
+        const res = await videoApi.uploadPart(key, uploadId, chunk.partNumber, blob, signal);
+        const etag = res.data?.etag;
+        if (!etag) {
+          console.error('[uploadPart] no ETag in response', { videoId, partNumber: chunk.partNumber });
+          throw new Error('No ETag received');
+        }
+        console.log('[uploadPart] ok', { videoId, partNumber: chunk.partNumber, etag: etag.slice(0, 20) });
+        return { etag, partNumber: chunk.partNumber };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[uploadPart] failed', { videoId, partNumber: chunk.partNumber, error: msg });
+        throw err;
       }
-      const etag = response.headers.get('ETag');
-      if (!etag) throw new Error('No ETag received');
-      return { etag: etag.replace(/"/g, ''), partNumber: chunk.partNumber };
     },
     []
   );
@@ -122,25 +127,11 @@ export function useUpload(options?: UseUploadOptions) {
       try {
         updateUpload(upload.videoId, { status: 'uploading' });
 
-        const signedResponses = await Promise.all(
-          upload.chunks.map((chunk) =>
-            videoApi.signPart({
-              key: upload.key,
-              uploadId: upload.uploadId,
-              partNumber: chunk.partNumber,
-            })
-          )
-        );
-
-        if (signal.aborted) return;
-
-        const signedUrls = signedResponses.map((r) => r.data.url);
         const completedParts = await runWithConcurrency(
           upload.chunks,
           MAX_CONCURRENT_CHUNKS,
-          async (chunk, i) => {
+          async (chunk) => {
             if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-            const url = signedUrls[i];
             let lastError: Error | null = null;
             for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
               if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -152,7 +143,8 @@ export function useUpload(options?: UseUploadOptions) {
                 const result = await uploadSingleChunk(
                   upload.videoId,
                   chunk,
-                  url,
+                  upload.key,
+                  upload.uploadId,
                   upload.file,
                   signal
                 );

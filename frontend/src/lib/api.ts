@@ -160,6 +160,28 @@ export const videoApi = {
     });
   },
 
+  /** Proxy upload part (backend PUTs to B2) to avoid CORS when frontend and B2 are cross-origin. */
+  uploadPart: async (
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    chunk: Blob,
+    signal?: AbortSignal
+  ): Promise<{ status: string; data: { etag: string } }> => {
+    const params = new URLSearchParams({ key, uploadId, partNumber: String(partNumber) });
+    const url = `${API_BASE_URL}/api/videos/upload-part?${params}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      body: chunk,
+      credentials: 'include',
+      signal,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new ApiError(data.message || 'Upload part failed', response.status);
+    return data;
+  },
+
   completeMultipart: async (data: {
     videoId: string;
     key: string;
