@@ -44,16 +44,21 @@ export interface CommentsPanelProps {
   onError: (msg: string) => void;
   /** Seek to time; if comment provided (marker/shape), parent may play to end of marker then pause */
   onSeekToTimestamp?: (timestamp: number, comment?: Comment) => void;
-  /** When adding a marker: Add marker -> Draw (freeze) -> draw -> Done drawing (resume) -> repeat -> End marker */
+  /** Quick marker = 1s at current time (captured on click); popup asks for label. */
   markerMode: MarkerModeState | null;
-  onStartMarker: () => void;
+  quickMarkerPopup: { timestamp: number } | null;
+  endMarkerPopup: { segments: MarkerSegment[] } | null;
+  onRequestQuickMarker: () => void;
+  onQuickMarkerSubmit: (label: string) => void;
+  onQuickMarkerCancel: () => void;
+  onStartMarkerWithDrawing: () => void;
   onStartDraw: () => void;
   onDoneDrawing: () => void;
   onCancelDrawing?: () => void;
-  onEndMarker: (label: string) => void;
-  onMarkerLabelChange: (label: string) => void;
+  onRequestEndMarker: () => void;
+  onEndMarkerSubmit: (label: string) => void;
+  onEndMarkerCancel: () => void;
   markerSaving?: boolean;
-  /** In live mode, only host can add markers; passengers see comments only. Default true (solo behavior). */
   canAddMarkersInLive?: boolean;
 }
 
@@ -75,19 +80,29 @@ export function CommentsPanel({
   onError,
   onSeekToTimestamp,
   markerMode,
-  onStartMarker,
+  quickMarkerPopup,
+  endMarkerPopup,
+  onRequestQuickMarker,
+  onQuickMarkerSubmit,
+  onQuickMarkerCancel,
+  onStartMarkerWithDrawing,
   onStartDraw,
   onDoneDrawing,
   onCancelDrawing,
-  onEndMarker,
-  onMarkerLabelChange,
+  onRequestEndMarker,
+  onEndMarkerSubmit,
+  onEndMarkerCancel,
   markerSaving = false,
   canAddMarkersInLive = true,
 }: CommentsPanelProps): React.ReactElement {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [guestInput, setGuestInput] = useState(guestName);
+  const [popupLabel, setPopupLabel] = useState('');
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  /** Cannot add normal comments while in any marker flow or while a marker popup is open. */
+  const markerFlowActive = markerMode != null || quickMarkerPopup != null || endMarkerPopup != null;
 
   const needsGuestName = isGuest && canAddComment && !guestName;
 
@@ -124,18 +139,24 @@ export function CommentsPanel({
     }
   };
 
-  const handleStartMarker = () => {
+  useEffect(() => {
+    if (quickMarkerPopup != null || endMarkerPopup != null) setPopupLabel('');
+  }, [quickMarkerPopup, endMarkerPopup]);
+
+  const handleQuickMarkerClick = () => {
     if (!canAddMarkersInLive) return;
     if (isGuest && !guestName) {
       if (guestInput.trim()) onGuestNameSubmit(guestInput.trim());
       return;
     }
-    onStartMarker();
+    onRequestQuickMarker();
   };
 
-  const handleEndMarker = () => {
-    if (!markerMode) return;
-    onEndMarker(markerMode.label);
+  const handlePopupSubmit = (kind: 'quick' | 'end') => {
+    const label = popupLabel.trim();
+    if (kind === 'quick') onQuickMarkerSubmit(label);
+    else onEndMarkerSubmit(label);
+    setPopupLabel('');
   };
 
   const handleDelete = async (commentId: string) => {
@@ -247,67 +268,103 @@ export function CommentsPanel({
         })}
         <div ref={commentsEndRef} />
       </div>
-      {canAddComment && (guestName || !isGuest) && (
-        <div className="p-2 border-t border-border space-y-2">
-          {markerMode && canAddMarkersInLive ? (
-            <div className="space-y-2">
-              <p className="text-xs text-warning">
-                {markerMode.segmentStartTime != null
-                  ? 'Drawing — click Done drawing to resume video, or add more segments.'
-                  : 'Adding marker — click Draw to freeze and draw, or add label and End marker.'}
-              </p>
-              {markerMode.segmentStartTime == null ? (
-                <button
-                  type="button"
-                  onClick={onStartDraw}
-                  className="w-full rounded px-2 py-2 min-h-[44px] text-sm bg-primary text-white hover:opacity-90 flex items-center justify-center gap-1.5 transition-opacity"
-                >
-                  <MapPin size={14} aria-hidden />
-                  Draw
-                </button>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={onDoneDrawing}
-                    className="flex-1 rounded px-2 py-2 min-h-[44px] text-sm bg-success text-white hover:opacity-90 flex items-center justify-center gap-1.5 transition-opacity"
-                  >
-                    <Check size={16} aria-hidden />
-                    Done drawing
-                  </button>
-                  {onCancelDrawing && (
-                    <button
-                      type="button"
-                      onClick={onCancelDrawing}
-                      className="rounded px-2 py-2 min-h-[44px] text-sm bg-elevated border border-border text-fg hover:bg-surface flex items-center justify-center gap-1.5 transition-colors duration-150"
-                      title="Cancel current drawing (discard this segment)"
-                    >
-                      <XCircle size={16} aria-hidden />
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              )}
-              {markerMode.segments.length > 0 && (
-                <p className="text-xs text-fg-muted">{markerMode.segments.length} segment(s)</p>
-              )}
-              <input
-                type="text"
-                value={markerMode.label}
-                onChange={(e) => onMarkerLabelChange(e.target.value)}
-                placeholder="Label for marker (optional)"
-                className="w-full rounded px-2 py-1.5 text-sm bg-page border border-border text-fg placeholder:text-fg-muted focus:ring-2 focus:ring-primary focus:border-primary"
-              />
+      {/* Label popup: Quick marker (time already captured) or End marker (segments already captured) */}
+      {(quickMarkerPopup != null || endMarkerPopup != null) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="marker-popup-title">
+          <div className="bg-elevated border border-border rounded-lg shadow-xl max-w-sm w-full p-4 space-y-3">
+            <h2 id="marker-popup-title" className="text-sm font-medium text-fg">
+              {quickMarkerPopup != null ? 'Quick marker label' : 'Marker label'}
+            </h2>
+            <input
+              type="text"
+              value={popupLabel}
+              onChange={(e) => setPopupLabel(e.target.value)}
+              placeholder="Label"
+              className="w-full rounded px-2 py-1.5 text-sm bg-page border border-border text-fg placeholder:text-fg-muted focus:ring-2 focus:ring-primary focus:border-primary"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handlePopupSubmit(quickMarkerPopup != null ? 'quick' : 'end');
+                if (e.key === 'Escape') quickMarkerPopup != null ? onQuickMarkerCancel() : onEndMarkerCancel();
+              }}
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
               <button
                 type="button"
-                onClick={handleEndMarker}
-                disabled={submitting || markerSaving || markerMode.segmentStartTime != null}
-                className="w-full rounded px-2 py-2 min-h-[44px] text-sm bg-warning text-white hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-opacity"
-                title={markerMode.segmentStartTime != null ? 'Finish or cancel current drawing first' : undefined}
+                onClick={quickMarkerPopup != null ? onQuickMarkerCancel : onEndMarkerCancel}
+                className="rounded px-3 py-1.5 text-sm bg-elevated border border-border text-fg hover:bg-surface"
               >
-                <MapPin size={14} aria-hidden />
-                End marker
+                Cancel
               </button>
+              <button
+                type="button"
+                onClick={() => handlePopupSubmit(quickMarkerPopup != null ? 'quick' : 'end')}
+                disabled={markerSaving || !popupLabel.trim()}
+                className="rounded px-3 py-1.5 text-sm bg-primary text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {markerSaving ? 'Saving…' : 'Add'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canAddComment && (guestName || !isGuest) && (
+        <div className="p-2 border-t border-border space-y-2">
+          {markerMode != null && canAddMarkersInLive ? (
+            <div className="space-y-2">
+              {markerMode.segmentStartTime != null ? (
+                <>
+                  <p className="text-xs text-warning">
+                    Video paused — draw on the video, then click Done drawing to add this segment (or Cancel).
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={onDoneDrawing}
+                      className="flex-1 rounded px-2 py-2 min-h-[44px] text-sm bg-success text-white hover:opacity-90 flex items-center justify-center gap-1.5"
+                    >
+                      <Check size={16} aria-hidden />
+                      Done drawing
+                    </button>
+                    {onCancelDrawing && (
+                      <button
+                        type="button"
+                        onClick={onCancelDrawing}
+                        className="rounded px-2 py-2 min-h-[44px] text-sm bg-elevated border border-border text-fg hover:bg-surface"
+                        title="Cancel this segment and resume video"
+                      >
+                        <XCircle size={16} aria-hidden />
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-fg-muted">
+                    {markerMode.segments.length > 0 ? `${markerMode.segments.length} segment(s). Add another or end.` : 'Draw on the video, or add more segments.'}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={onStartDraw}
+                      className="rounded px-2 py-2 min-h-[44px] text-sm bg-primary text-white hover:opacity-90 flex items-center justify-center gap-1.5"
+                    >
+                      <MapPin size={14} aria-hidden />
+                      Draw
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onRequestEndMarker}
+                      disabled={submitting || markerSaving}
+                      className="rounded px-2 py-2 min-h-[44px] text-sm bg-warning text-white hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      <MapPin size={14} aria-hidden />
+                      End marker
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -317,29 +374,46 @@ export function CommentsPanel({
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddChat()}
-                  placeholder="Add comment at current time..."
+                  placeholder={markerFlowActive ? 'Finish marker flow to add comments' : 'Add comment at current time...'}
                   className="flex-1 rounded px-2 py-1.5 text-sm bg-page border border-border text-fg placeholder:text-fg-muted focus:ring-2 focus:ring-primary focus:border-primary"
+                  disabled={markerFlowActive}
                 />
                 <button
                   type="button"
                   onClick={handleAddChat}
-                  disabled={submitting}
+                  disabled={submitting || markerFlowActive}
                   className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center bg-primary text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
                   aria-label="Send comment"
                 >
                   <Send size={20} aria-hidden />
                 </button>
               </div>
-              {canAddMarkersInLive && (
-                <button
-                  type="button"
-                  onClick={handleStartMarker}
-                  disabled={submitting}
-                  className="flex items-center gap-1.5 rounded px-2 py-2 min-h-[44px] text-xs text-warning hover:bg-elevated transition-colors duration-150"
-                >
-                  <MapPin size={14} aria-hidden />
-                  Add marker
-                </button>
+              <p className="text-xs text-fg-muted">
+                Ephemeral draw: only in live session. Quick marker (1s) or Marker with drawing (pause → draw → end).
+              </p>
+              {canAddMarkersInLive && !markerFlowActive && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleQuickMarkerClick}
+                    disabled={submitting || markerSaving}
+                    className="rounded px-2 py-2 min-h-[44px] text-xs bg-elevated border border-border text-fg hover:bg-surface flex items-center gap-1.5"
+                    title="Capture current time, then add label in popup (video keeps playing)"
+                  >
+                    <MapPin size={14} aria-hidden />
+                    Quick marker (1s)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onStartMarkerWithDrawing}
+                    disabled={submitting || markerSaving}
+                    className="rounded px-2 py-2 min-h-[44px] text-xs text-warning hover:bg-elevated border border-warning/50 flex items-center gap-1.5"
+                    title="Pause, draw, add segments, then End marker and add label in popup"
+                  >
+                    <MapPin size={14} aria-hidden />
+                    Marker with drawing
+                  </button>
+                </div>
               )}
             </>
           )}

@@ -294,7 +294,7 @@ export function DrawingCanvas({
       )}
       {markerModeActive && (
         <div className="absolute top-2 left-2 rounded px-2 py-1 text-xs bg-blue-600 text-white font-medium">
-          Adding marker — draw on video, then add label and click End marker
+          Marker with drawing — draw on video, then click End marker (save & resume) in the panel
         </div>
       )}
       {iHaveLock && !markerModeActive && sessionStrokes.length > 0 && onSaveDrawing && (

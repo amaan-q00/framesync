@@ -57,6 +57,10 @@ export default function WatchPage(): React.ReactElement {
   const [strokeColor, setStrokeColor] = useState('#FF0000');
   const [markerMode, setMarkerMode] = useState<MarkerModeState | null>(null);
   const [markerSaving, setMarkerSaving] = useState(false);
+  /** Popup: timestamp captured when Quick marker was clicked; submit uses this time, not submit time. */
+  const [quickMarkerPopup, setQuickMarkerPopup] = useState<{ timestamp: number } | null>(null);
+  /** Popup: segments captured when End marker was clicked; submit uses these, not submit time. */
+  const [endMarkerPopup, setEndMarkerPopup] = useState<{ segments: MarkerSegment[] } | null>(null);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [manifestLoadFailed, setManifestLoadFailed] = useState(false);
@@ -67,9 +71,13 @@ export default function WatchPage(): React.ReactElement {
   const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
   const pauseAtTimeRef = useRef<number | null>(null);
   const isPlayingRef = useRef(false);
+  const markerModeRef = useRef<MarkerModeState | null>(null);
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+  useEffect(() => {
+    markerModeRef.current = markerMode;
+  }, [markerMode]);
 
   const guestSocketEnabled = !isAuthenticated && Boolean(token && id && video);
   const { socket: guestSocket } = useWatchSocket(id, token, guestSocketEnabled);
@@ -135,6 +143,7 @@ export default function WatchPage(): React.ReactElement {
   const isPlayable = Boolean(video?.manifestUrl);
   const canAddComment = Boolean(video && isPlayable);
   const canAddMarkers = (video?.role === 'owner' || video?.role === 'editor') && (!isLiveMode || isHost) && isPlayable;
+  /** Ephemeral drawing: only in live session (broadcast, 1s TTL, never saved). Not available in solo. */
   const canDoEphemeral = isInLiveSession && !video?.isPublicAccess;
   const iHaveLock = Boolean(
     isLiveMode &&
@@ -398,14 +407,62 @@ export default function WatchPage(): React.ReactElement {
     [fps]
   );
 
-  const handleStartMarker = useCallback(() => {
-    setMarkerMode({
+  /** Capture time when Quick marker is clicked; parent shows popup. Time used on submit is this, not submit time. */
+  const handleRequestQuickMarker = useCallback(() => {
+    const t = playerRef.current?.getCurrentTime() ?? 0;
+    setQuickMarkerPopup({ timestamp: t });
+  }, []);
+
+  const handleQuickMarkerSubmit = useCallback(
+    async (label: string) => {
+      if (!video || quickMarkerPopup == null) return;
+      const t = quickMarkerPopup.timestamp;
+      setMarkerSaving(true);
+      try {
+        const res = await videoApi.addComment(
+          id,
+          {
+            type: 'marker',
+            timestamp: t,
+            duration: 1,
+            text: typeof label === 'string' ? label.trim() : '',
+            drawing_data: undefined,
+            ...(token && guestName && { guestName }),
+          },
+          token
+        );
+        addComment(res.data);
+        setQuickMarkerPopup(null);
+      } catch (err) {
+        showError(getErrorMessage(err));
+      } finally {
+        setMarkerSaving(false);
+      }
+    },
+    [id, video, token, guestName, quickMarkerPopup, addComment, showError]
+  );
+
+  const handleQuickMarkerCancel = useCallback(() => {
+    setQuickMarkerPopup(null);
+  }, []);
+
+  /** Marker with drawing: one click = pause + start time. User can add segments (Draw / Done drawing), then End marker opens popup. */
+  const handleStartMarkerWithDrawing = useCallback(() => {
+    const player = playerRef.current;
+    const t = player?.getCurrentTime() ?? currentTime;
+    player?.pause();
+    setIsPlaying(false);
+    const mode: MarkerModeState = {
       segments: [],
       label: '',
       segmentStrokes: [],
-    });
-  }, []);
+      segmentStartTime: t,
+    };
+    markerModeRef.current = mode;
+    setMarkerMode(mode);
+  }, [currentTime]);
 
+  /** Add another segment: pause at current time, user draws, then Done drawing. */
   const handleStartDraw = useCallback(() => {
     const player = playerRef.current;
     const t = player?.getCurrentTime() ?? currentTime;
@@ -418,52 +475,69 @@ export default function WatchPage(): React.ReactElement {
 
   const handleDoneDrawing = useCallback(() => {
     const player = playerRef.current;
-    if (!player || !markerMode || markerMode.segmentStartTime == null) return;
+    const latest = markerModeRef.current;
+    if (!player || !latest || latest.segmentStartTime == null) return;
     const endTime = player.getCurrentTime();
     const seg: MarkerSegment = {
-      startTime: markerMode.segmentStartTime,
+      startTime: latest.segmentStartTime,
       endTime,
-      strokes: [...markerMode.segmentStrokes],
+      strokes: [...latest.segmentStrokes],
     };
-    setMarkerMode((m) =>
-      m
-        ? {
-            ...m,
-            segments: [...m.segments, seg],
-            segmentStartTime: undefined,
-            segmentStrokes: [],
-          }
-        : m
-    );
+    const nextMode: MarkerModeState = {
+      ...latest,
+      segments: [...latest.segments, seg],
+      segmentStartTime: undefined,
+      segmentStrokes: [],
+    };
+    markerModeRef.current = nextMode;
+    setMarkerMode((m) => (m ? nextMode : m));
     player.play();
-    setIsPlaying(true);
-  }, [markerMode]);
-
-  const handleCancelDrawing = useCallback(() => {
-    const player = playerRef.current;
-    setMarkerMode((m) =>
-      m && m.segmentStartTime != null
-        ? { ...m, segmentStartTime: undefined, segmentStrokes: [] }
-        : m
-    );
-    player?.play();
     setIsPlaying(true);
   }, []);
 
-  const handleEndMarker = useCallback(
+  const handleCancelDrawing = useCallback(() => {
+    markerModeRef.current = null;
+    setMarkerMode(null);
+    playerRef.current?.play();
+    setIsPlaying(true);
+  }, []);
+
+  /** Capture segments when End marker is clicked; open popup. On submit we use these segments (times from button clicks). */
+  const handleRequestEndMarker = useCallback(() => {
+    const latest = markerModeRef.current;
+    let segments = latest?.segments ?? [];
+    const segmentStartTime = latest?.segmentStartTime;
+    const segmentStrokes = latest?.segmentStrokes ?? [];
+    const now = playerRef.current?.getCurrentTime() ?? 0;
+    if (segments.length === 0 && segmentStartTime != null) {
+      segments = [
+        {
+          startTime: segmentStartTime,
+          endTime: now,
+          strokes: [...segmentStrokes],
+        },
+      ];
+    }
+    markerModeRef.current = null;
+    setMarkerMode(null);
+    playerRef.current?.play();
+    setIsPlaying(true);
+    setEndMarkerPopup({ segments });
+  }, []);
+
+  const handleEndMarkerSubmit = useCallback(
     async (label: string) => {
-      if (!video) return;
-      const segments = markerMode?.segments ?? [];
+      if (!video || endMarkerPopup == null) return;
+      const segments = endMarkerPopup.segments;
       setMarkerSaving(true);
       try {
         const text = typeof label === 'string' ? label.trim() : '';
         if (segments.length === 0) {
-          const t = playerRef.current?.getCurrentTime() ?? 0;
           const res = await videoApi.addComment(
             id,
             {
               type: 'marker',
-              timestamp: t,
+              timestamp: 0,
               duration: 1,
               text,
               drawing_data: undefined,
@@ -476,13 +550,6 @@ export default function WatchPage(): React.ReactElement {
           const minStart = Math.min(...segments.map((s) => s.startTime));
           const maxEnd = Math.max(...segments.map((s) => s.endTime));
           const duration = Math.max(maxEnd - minStart, 1);
-          const drawingPayload = {
-            segments: segments.map((seg) => ({
-              startTime: seg.startTime,
-              endTime: seg.endTime,
-              strokes: seg.strokes,
-            })),
-          };
           const res = await videoApi.addComment(
             id,
             {
@@ -490,22 +557,32 @@ export default function WatchPage(): React.ReactElement {
               timestamp: minStart,
               duration,
               text,
-              drawing_data: drawingPayload,
+              drawing_data: {
+                segments: segments.map((seg) => ({
+                  startTime: seg.startTime,
+                  endTime: seg.endTime,
+                  strokes: seg.strokes,
+                })),
+              },
               ...(token && guestName && { guestName }),
             },
             token
           );
           addComment(res.data);
         }
-        setMarkerMode(null);
+        setEndMarkerPopup(null);
       } catch (err) {
         showError(getErrorMessage(err));
       } finally {
         setMarkerSaving(false);
       }
     },
-    [id, video, token, guestName, markerMode?.segments, addComment, showError]
+    [id, video, token, guestName, endMarkerPopup, addComment, showError]
   );
+
+  const handleEndMarkerCancel = useCallback(() => {
+    setEndMarkerPopup(null);
+  }, []);
 
   const handleStroke = useCallback(
     (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => {
@@ -751,9 +828,11 @@ export default function WatchPage(): React.ReactElement {
               markerPreviewSegments={markerMode?.segments ?? []}
               strokeColor={strokeColor}
               remoteStrokes={canDoEphemeral ? remoteStrokes : []}
-              ephemeralStrokes={canDoEphemeral ? ephemeralStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })) : []}
+              ephemeralStrokes={
+                canDoEphemeral ? ephemeralStrokes.map((s) => ({ points: s.points, color: s.color, width: s.width })) : []
+              }
               canDrawEphemeral={canDoEphemeral}
-              isEphemeralStroke={isLiveMode && !iHaveLock && canDoEphemeral}
+              isEphemeralStroke={canDoEphemeral && (isLiveMode ? !iHaveLock : true)}
               shapeComments={shapeComments}
               currentFrame={currentFrame}
               currentTime={currentTime}
@@ -777,7 +856,7 @@ export default function WatchPage(): React.ReactElement {
             />
           )}
           <div className="flex items-center gap-4 overflow-hidden min-h-[52px]">
-            {canDoEphemeral && (
+            {canDoEphemeral && !markerMode && (
               <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                 <span className="text-xs text-fg-muted shrink-0">Pen:</span>
                 <div className="flex gap-1.5 overflow-x-auto overflow-y-hidden py-1">
@@ -839,12 +918,18 @@ export default function WatchPage(): React.ReactElement {
             onError={showError}
             onSeekToTimestamp={isLiveMode && isPassenger ? undefined : handleSeekToTimestamp}
             markerMode={markerMode}
-            onStartMarker={handleStartMarker}
+            quickMarkerPopup={quickMarkerPopup}
+            endMarkerPopup={endMarkerPopup}
+            onRequestQuickMarker={handleRequestQuickMarker}
+            onQuickMarkerSubmit={handleQuickMarkerSubmit}
+            onQuickMarkerCancel={handleQuickMarkerCancel}
+            onStartMarkerWithDrawing={handleStartMarkerWithDrawing}
             onStartDraw={handleStartDraw}
             onDoneDrawing={handleDoneDrawing}
             onCancelDrawing={handleCancelDrawing}
-            onEndMarker={handleEndMarker}
-            onMarkerLabelChange={handleMarkerLabelChange}
+            onRequestEndMarker={handleRequestEndMarker}
+            onEndMarkerSubmit={handleEndMarkerSubmit}
+            onEndMarkerCancel={handleEndMarkerCancel}
             markerSaving={markerSaving}
             canAddMarkersInLive={canAddMarkers}
           />

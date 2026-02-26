@@ -212,7 +212,7 @@ export const videoApi = {
     return apiRequest(`/videos/${videoId}/share/me`, { method: 'DELETE' });
   },
 
-  getVideo: async (videoId: string, token?: string): Promise<{ status: string; data: Video & { role: string; manifestUrl: string } }> => {
+  getVideo: async (videoId: string, token?: string): Promise<{ status: string; data: Video & { role: string; manifestUrl: string; isPublicAccess?: boolean } }> => {
     const url = token ? `/videos/${videoId}?token=${token}` : `/videos/${videoId}`;
     return apiRequest(url, {
       method: 'GET',

@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Next.js 16 uses Turbopack by default; empty config acknowledges that (webpack is for dev watchOptions only).
+  turbopack: {},
   webpack: (config, context) => {
     // Enable polling for Docker on Windows
     config.watchOptions = {
