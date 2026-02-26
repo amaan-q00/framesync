@@ -72,7 +72,7 @@ export class SocketService {
   constructor(httpServer: HttpServer) {
     this.io = new Server(httpServer, {
       cors: {
-        origin: env.FRONTEND_URL, // Uses your env variable
+        origin: env.APP_URL,
         methods: ["GET", "POST"],
         credentials: true
       }

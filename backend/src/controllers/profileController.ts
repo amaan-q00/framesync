@@ -3,8 +3,8 @@ import { AppError } from '../utils/appError';
 import { AuthRequest } from '../middleware/auth';
 import pool from '../config/db';
 import { ProfileUpdateInput } from '../types';
-import { s3, BUCKET_NAME, S3_PUBLIC_ENDPOINT } from '../config/storage';
-import { env } from '../config/env';
+import { s3, BUCKET_NAME } from '../config/storage';
+import { toPresignedAssetUrl } from '../utils/presigned';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 // GET /api/profile/me - Get current user profile
@@ -19,9 +19,11 @@ export const getProfile = async (req: AuthRequest, res: Response, next: NextFunc
       return next(new AppError('User not found', 404));
     }
 
+    const user = result.rows[0];
+    const avatar_url = await toPresignedAssetUrl(user.avatar_url, 604800);
     res.status(200).json({
       status: 'success',
-      data: result.rows[0]
+      data: { ...user, avatar_url }
     });
   } catch (error) {
     next(error);
@@ -68,9 +70,11 @@ export const updateProfile = async (req: AuthRequest, res: Response, next: NextF
       return next(new AppError('User not found', 404));
     }
 
+    const user = result.rows[0];
+    const resolvedAvatarUrl = await toPresignedAssetUrl(user.avatar_url, 604800);
     res.status(200).json({
       status: 'success',
-      data: { user: result.rows[0] }
+      data: { user: { ...user, avatar_url: resolvedAvatarUrl } }
     });
   } catch (error) {
     next(error);
@@ -112,20 +116,18 @@ export const uploadAvatar = async (req: AuthRequest, res: Response, next: NextFu
       ContentType: file.mimetype,
     };
 
-    const s3Result = await s3.send(new PutObjectCommand(uploadParams));
-    
-    // Construct the URL using public endpoint (localhost for dev, actual endpoint for prod)
-    const avatarUrl = `${S3_PUBLIC_ENDPOINT}/${BUCKET_NAME}/${key}`;
+    await s3.send(new PutObjectCommand(uploadParams));
 
-    // Update user's avatar URL in database
+    // Store key only; presigned URLs generated when serving
     await pool.query(
       'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
-      [avatarUrl, userId]
+      [key, userId]
     );
 
+    const avatar_url = await toPresignedAssetUrl(key, 604800);
     res.status(200).json({
       status: 'success',
-      data: { avatar_url: avatarUrl }
+      data: { avatar_url }
     });
 
   } catch (error) {

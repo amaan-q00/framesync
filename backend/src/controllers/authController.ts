@@ -10,12 +10,13 @@ import { AppError } from '../utils/appError';
 import { isValidEmailFormat } from '../utils/emailValidation';
 import { User, SafeUser, CookieOptions } from '../types';
 import { AuthRequest } from '../middleware/auth';
+import { toPresignedAssetUrl } from '../utils/presigned';
 
 // Google: ID token verification (for POST /google with token from frontend)
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
 // Google: OAuth2 code flow (backend-driven; frontend just redirects here)
-const googleRedirectUri = `${env.BACKEND_PUBLIC_URL.replace(/\/$/, '')}/api/auth/google/callback`;
+const googleRedirectUri = `${env.API_URL.replace(/\/$/, '')}/api/auth/google/callback`;
 const googleOAuth2Client = new OAuth2Client(
   env.GOOGLE_CLIENT_ID,
   env.GOOGLE_CLIENT_SECRET,
@@ -56,14 +57,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   try {
     const validatedData = LoginSchema.parse(req.body);
     const result = await AuthService.login(validatedData);
-    
-    // Set auth cookie
+
     setAuthCookie(res, result.token);
-    
-    // Return user data without token
-    res.status(200).json({ 
-      status: 'success', 
-      data: { user: result.user }
+
+    const avatar_url = await toPresignedAssetUrl(result.user.avatar_url, 604800);
+    res.status(200).json({
+      status: 'success',
+      data: { user: { ...result.user, avatar_url } }
     });
   } catch (error) {
     next(error);
@@ -119,6 +119,7 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
 
     const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
     setAuthCookie(res, jwtToken);
+    const avatar_url = await toPresignedAssetUrl(user.avatar_url, 604800);
     res.status(200).json({
       status: 'success',
       data: {
@@ -126,7 +127,7 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
           id: user.id,
           email: user.email,
           name: user.name,
-          avatar_url: user.avatar_url,
+          avatar_url,
           created_at: user.created_at,
         },
       },
@@ -159,7 +160,7 @@ export const googleRedirect = async (req: Request, res: Response, next: NextFunc
 export const googleCallback = async (req: Request, res: Response, next: NextFunction) => {
   const { code, error: oauthError } = req.query as { code?: string; error?: string };
   if (oauthError) {
-    const frontend = env.FRONTEND_URL.replace(/\/$/, '');
+    const frontend = env.APP_URL.replace(/\/$/, '');
     return res.redirect(302, `${frontend}/login?error=google_denied`);
   }
   if (!code) return next(new AppError('Missing authorization code', 400));
@@ -186,7 +187,7 @@ export const googleCallback = async (req: Request, res: Response, next: NextFunc
     const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
     setAuthCookie(res, jwtToken);
 
-    const frontend = env.FRONTEND_URL.replace(/\/$/, '');
+    const frontend = env.APP_URL.replace(/\/$/, '');
     res.redirect(302, `${frontend}/dashboard`);
   } catch (err) {
     console.error('Google callback error:', err);
@@ -232,7 +233,6 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
 // Session validation endpoint
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // User is already attached to request by protect middleware
     const userResult = await pool.query(
       'SELECT id, email, name, avatar_url, created_at FROM users WHERE id = $1',
       [req.user?.userId]
@@ -242,9 +242,11 @@ export const getMe = async (req: AuthRequest, res: Response, next: NextFunction)
       return next(new AppError('User not found', 404));
     }
 
+    const user = userResult.rows[0];
+    const avatar_url = await toPresignedAssetUrl(user.avatar_url, 604800);
     res.status(200).json({
       status: 'success',
-      data: { user: userResult.rows[0] }
+      data: { user: { ...user, avatar_url } }
     });
   } catch (error) {
     next(error);

@@ -1,18 +1,13 @@
 services:
-  # 1. DATABASE (Postgres)
   db:
     image: postgres:15-alpine
     restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    env_file: ./backend/.env
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # 2. CACHE & QUEUE (Redis)
   redis:
     image: redis:alpine
     restart: always
@@ -20,21 +15,20 @@ services:
       - "6379:6379"
     command: redis-server --save 60 1 --loglevel warning
 
-  # 3. STORAGE (MinIO - S3 Compatible)
   minio:
     image: minio/minio
     restart: always
     command: server /data --console-address ":9001"
+    env_file: ./backend/.env
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-admin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-password123}
     ports:
-      - "9000:9000" # API Port
-      - "9001:9001" # Dashboard Port
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio_data:/data
 
-  # 4. BACKEND API (Node.js)
   api:
     profiles: ["dev"]
     build:
@@ -43,24 +37,8 @@ services:
     restart: always
     command: pnpm dev
     ports:
-      - "${API_PORT:-8000}:${API_PORT:-8000}"
-    environment:
-      NODE_ENV: development
-      API_PORT: ${API_PORT:-8000}
-      APP_PORT: ${APP_PORT:-3000}
-      POSTGRES_HOST: db
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      - "8000:8000"
+    env_file: ./backend/.env
     depends_on:
       - db
       - redis
@@ -78,30 +56,13 @@ services:
       target: prod
     restart: always
     ports:
-      - "${API_PORT:-8000}:${API_PORT:-8000}"
-    environment:
-      NODE_ENV: production
-      API_PORT: ${API_PORT:-8000}
-      APP_PORT: ${APP_PORT:-3000}
-      POSTGRES_HOST: db
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      - "8000:8000"
+    env_file: ./backend/.env
     depends_on:
       - db
       - redis
       - minio
 
-  # 5. FRONTEND (Next.js)
   frontend:
     profiles: ["dev"]
     build:
@@ -110,20 +71,19 @@ services:
       target: dev
     restart: always
     command: pnpm dev
-    # FIX 1: Polling Environment Variables
+     # FIX 1: Polling Environment Variables
     environment:
-      NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
       # These force standard watchers to use polling
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       WDS_SOCKET_PORT: 3000
+    env_file: ./frontend/.env
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "3000:3000"
     volumes:
-      - ./frontend:/app          # Mount your code
-      - /app/node_modules        # Prevent host from overwriting container's modules
-      - /app/.next               # Keep build cache inside container
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     depends_on:
       - api
 
@@ -135,10 +95,8 @@ services:
       target: prod
     restart: always
     ports:
-      - "${APP_PORT:-3000}:3000"
-    environment:
-      NODE_ENV: production
-      NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
+      - "3000:3000"
+    env_file: ./frontend/.env
     depends_on:
       - api-prod
 

@@ -1,12 +1,9 @@
 import { Queue } from 'bullmq';
-import { redis } from '../config/redis'; // reusing connection config
+import { createRedisConnection } from '../config/redis';
 
-// Create the Queue 'video-transcoding'
+// Separate resilient connection (retry + TLS) so job adds work after idle disconnect (e.g. Upstash)
 export const videoQueue = new Queue('video-transcoding', {
-  connection: {
-    host: redis.options.host,
-    port: redis.options.port,
-  },
+  connection: createRedisConnection(),
   defaultJobOptions: {
     attempts: 3, // If FFmpeg crashes, retry 3 times
     backoff: {

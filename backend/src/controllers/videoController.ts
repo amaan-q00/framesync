@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import { 
-  CreateMultipartUploadCommand, 
-  UploadPartCommand, 
+import {
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
   CompleteMultipartUploadCommand,
   ListObjectsV2Command,
   DeleteObjectsCommand
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { toPresignedThumbnailUrl, toPresignedSegmentUrl } from '../utils/presigned';
 import { randomBytes } from 'crypto';
 import pool from '../config/db';
 import { redis } from '../config/redis';
@@ -78,11 +79,10 @@ export const getMyWorks = async (req: AuthRequest, res: Response, next: NextFunc
        FROM videos WHERE user_id = $1 ${titleFilter} ORDER BY created_at DESC LIMIT ${search ? '$3' : '$2'} OFFSET ${search ? '$4' : '$3'}`,
       listParams
     );
-    const storageHost = env.NODE_ENV === 'development' ? 'http://127.0.0.1:9000' : env.S3_ENDPOINT;
-    const data = result.rows.map((row: { thumbnail_path?: string | null; [k: string]: unknown }) => ({
+    const data = await Promise.all(result.rows.map(async (row: { thumbnail_path?: string | null; [k: string]: unknown }) => ({
       ...row,
-      thumbnail_url: row.thumbnail_path ? `${storageHost}/${BUCKET_NAME}/${row.thumbnail_path}` : null,
-    }));
+      thumbnail_url: await toPresignedThumbnailUrl(row.thumbnail_path as string | null),
+    })));
     res.status(200).json({ status: 'success', data, total });
   } catch (error) {
     next(error);
@@ -114,11 +114,10 @@ export const getSharedWithMe = async (req: AuthRequest, res: Response, next: Nex
        ORDER BY vs.created_at DESC LIMIT ${search ? '$3' : '$2'} OFFSET ${search ? '$4' : '$3'}`,
       listParams
     );
-    const storageHost = env.NODE_ENV === 'development' ? 'http://127.0.0.1:9000' : env.S3_ENDPOINT;
-    const data = result.rows.map((row: { thumbnail_path?: string | null; [k: string]: unknown }) => ({
+    const data = await Promise.all(result.rows.map(async (row: { thumbnail_path?: string | null; [k: string]: unknown }) => ({
       ...row,
-      thumbnail_url: row.thumbnail_path ? `${storageHost}/${BUCKET_NAME}/${row.thumbnail_path}` : null,
-    }));
+      thumbnail_url: await toPresignedThumbnailUrl(row.thumbnail_path as string | null),
+    })));
     res.status(200).json({ status: 'success', data, total });
   } catch (error) {
     next(error);
@@ -159,11 +158,6 @@ export const getManifest = async (req: AuthRequest, res: Response, next: NextFun
       return res.status(404).set({ 'Cache-Control': 'no-cache' }).end();
     }
 
-    const storageHost = env.NODE_ENV === 'development'
-      ? 'http://127.0.0.1:9000'
-      : env.S3_ENDPOINT;
-    const baseUrl = `${storageHost}/${BUCKET_NAME}/`;
-
     const lines: string[] = [
       '#EXTM3U',
       '#EXT-X-VERSION:3',
@@ -176,7 +170,7 @@ export const getManifest = async (req: AuthRequest, res: Response, next: NextFun
       const isLast = i === segmentKeys.length - 1;
       const duration = isLast ? HLS_SEGMENT_DURATION : HLS_SEGMENT_DURATION;
       lines.push(`#EXTINF:${duration.toFixed(3)},`);
-      lines.push(baseUrl + key);
+      lines.push(await toPresignedSegmentUrl(key));
     }
 
     if (video.status === 'ready') {
@@ -213,7 +207,7 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
       console.error(`Redis View Incr Failed for ${id}`, err)
   );
 
-    const apiHost = env.API_URL || `http://localhost:${env.PORT}`;
+    const apiHost = env.API_URL;
     const manifestPath = `${apiHost}/api/videos/${id}/manifest.m3u8`;
     let playable = video.status === 'ready';
     if (video.status === 'processing') {
@@ -226,12 +220,15 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
         : manifestPath
       : undefined;
 
+    const thumbnail_url = await toPresignedThumbnailUrl(video.thumbnail_path);
+
     res.status(200).json({
       status: 'success',
       data: {
         ...video,
         role, // 'owner', 'editor', 'viewer'
         manifestUrl,
+        thumbnail_url,
         isPublicAccess: Boolean(isPublicAccess),
       }
     });
@@ -487,6 +484,43 @@ export const signPart = async (req: AuthRequest, res: Response, next: NextFuncti
       status: 'success',
       data: { url: signedUrl }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Proxy upload part: pass req stream directly to S3 (same as reference). */
+export const uploadPart = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const key = req.query.key as string;
+  const uploadId = req.query.uploadId as string;
+  const partNumber = req.query.partNumber as string;
+
+  try {
+    if (!key || !uploadId || !partNumber) {
+      return next(new AppError('Missing key, uploadId or partNumber', 400));
+    }
+    const partNum = parseInt(partNumber, 10);
+    if (Number.isNaN(partNum) || partNum < 1) {
+      return next(new AppError('Invalid partNumber', 400));
+    }
+
+    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+    if (!contentLength) return next(new AppError('Missing Content-Length', 400));
+
+    const command = new UploadPartCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: partNum,
+      Body: req,
+      ContentLength: contentLength,
+    });
+
+    const s3result = await s3.send(command);
+    const etag = s3result.ETag ? s3result.ETag.replace(/"/g, '') : '';
+    if (!etag) return next(new AppError('No ETag from storage', 502));
+
+    res.status(200).json({ status: 'success', data: { etag } });
   } catch (error) {
     next(error);
   }

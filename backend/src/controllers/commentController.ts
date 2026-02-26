@@ -3,6 +3,7 @@ import pool from "../config/db";
 import { AppError } from "../utils/appError";
 import { AuthRequest } from "../middleware/auth";
 import { SocketService } from "../services/socketService";
+import { toPresignedAssetUrl } from "../utils/presigned";
 
 // Permission helper: same access logic as checkVideoAccess (owner, team, public).
 // canAddComment: anyone with access; canAddMarkers: owner or editor only (not viewers).
@@ -173,7 +174,7 @@ export const addComment = async (
         );
         if (userRes.rowCount && userRes.rowCount > 0) {
           userName = userRes.rows[0].name;
-          userAvatar = userRes.rows[0].avatar_url;
+          userAvatar = await toPresignedAssetUrl(userRes.rows[0].avatar_url, 604800);
         }
       }
 
@@ -215,7 +216,13 @@ export const getComments = async (
        ORDER BY c.created_at ASC`,
       [id],
     );
-    res.status(200).json({ status: "success", data: result.rows });
+    const data = await Promise.all(
+      result.rows.map(async (row) => ({
+        ...row,
+        user_avatar: await toPresignedAssetUrl(row.user_avatar, 604800),
+      })),
+    );
+    res.status(200).json({ status: "success", data });
   } catch (error) {
     next(error);
   }

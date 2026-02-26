@@ -6,7 +6,7 @@ import { spawn } from 'child_process';
 import { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3, BUCKET_NAME } from '../config/storage';
-import { redis } from '../config/redis';
+import { createRedisConnection } from '../config/redis';
 import pool from '../config/db';
 import { promisify } from 'util';
 import { SocketService } from './socketService';
@@ -222,12 +222,9 @@ const processVideo = async (job: Job) => {
 
 export const initWorker = () => {
   const worker = new Worker('video-transcoding', processVideo, {
-    connection: {
-      host: redis.options.host,
-      port: redis.options.port,
-    },
-    concurrency: 1, 
-    lockDuration: 120000, 
+    connection: createRedisConnection(),
+    concurrency: 1,
+    lockDuration: 120000,
   });
   console.log('HLS Worker initialized');
 };

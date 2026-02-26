@@ -2,5 +2,5 @@
 
 To run locally:
 ```bash
-docker-compose up
+docker compose --profile dev up --build
 ```

@@ -5,11 +5,13 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import pool from './config/db';
 import { s3, BUCKET_NAME, initStorage } from './config/storage';
-import { CreateBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
+import { CreateBucketCommand } from '@aws-sdk/client-s3';
 import createTables from './models/schema';
 import authRoutes from './routes/authRoutes';
 import videoRoutes from './routes/videoRoutes';
 import profileRoutes from './routes/profileRoutes';
+import { protect } from './middleware/auth';
+import { uploadPart } from './controllers/videoController';
 import { globalErrorHandler } from './middleware/errorHandler';
 import { initWorker } from './services/worker';
 import { initCronJobs } from './services/cronService';
@@ -18,13 +20,16 @@ import { SocketService } from './services/socketService';
 const app = express();
 
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: env.APP_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(cookieParser());
+
+// Stream upload-part body to B2 (no buffering); must be before express.json() so body stays a stream
+app.post('/api/videos/upload-part', protect, uploadPart);
 
 app.use(express.json());
 
@@ -54,28 +59,7 @@ const init = async () => {
       if (e.Code !== 'BucketAlreadyOwnedByYou') throw e;
     }
 
-    // 3. Storage CORS Setup (Soft Fail)
-    try {
-      await s3.send(new PutBucketCorsCommand({
-        Bucket: BUCKET_NAME,
-        CORSConfiguration: {
-          CORSRules: [
-            {
-              AllowedHeaders: ["*"],
-              AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"],
-              AllowedOrigins: ["*"],
-              ExposeHeaders: ["ETag"]
-            }
-          ]
-        }
-      }));
-      console.log('MinIO CORS Configured via SDK');
-    } catch (error: any) {
-      console.warn('WARNING: Automatic CORS configuration failed. Manual configuration may be required.');
-      console.warn(`Error: ${error.message}`);
-    }
-
-    // 4. Worker
+    // 3. Worker
     initWorker();
 
     // 5. Cron
