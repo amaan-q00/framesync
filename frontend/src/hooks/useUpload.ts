@@ -4,8 +4,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { videoApi } from '@/lib/api';
 import type { UploadSession, UploadChunk } from '@/types/video';
 
-const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB
-const MAX_CONCURRENT_CHUNKS = 4;
+const CHUNK_SIZE = 15 * 1024 * 1024; // 15MB
+const MAX_CONCURRENT_CHUNKS = 3;
 const MAX_RETRIES = 3;
 
 function createChunks(file: File): UploadChunk[] {
