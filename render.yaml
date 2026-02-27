@@ -1,0 +1,17 @@
+# Render Blueprint: Framesync backend (Docker)
+# Dashboard: New > Blueprint > Connect repo and sync, or create Web Service manually with these settings.
+# Env vars (DATABASE_URL, REDIS_URL, S3_*, JWT_SECRET, API_URL, APP_URL, etc.) must be set in the Render Dashboard.
+
+services:
+  - type: web
+    runtime: docker
+    name: framesync-backend
+    # Monorepo: Dockerfile and build context are in backend/
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Add the rest in Dashboard (secrets): DATABASE_URL, REDIS_URL, S3_*, JWT_SECRET, API_URL, APP_URL, GOOGLE_*, COOKIE_*
