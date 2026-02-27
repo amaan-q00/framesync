@@ -6,18 +6,6 @@ import { env } from '../config/env';
 import { User } from '../types';
 import pool from '../config/db';
 
-function parseCookieHeader(cookieHeader: string | undefined): Record<string, string> {
-  if (!cookieHeader || typeof cookieHeader !== 'string') return {};
-  return cookieHeader.split(';').reduce<Record<string, string>>((acc, part) => {
-    const eq = part.indexOf('=');
-    if (eq === -1) return acc;
-    const k = part.slice(0, eq).trim();
-    const v = part.slice(eq + 1).trim();
-    if (k && v) acc[k] = decodeURIComponent(v);
-    return acc;
-  }, {});
-}
-
 export interface GuestAccess {
   videoId: string;
   publicToken?: string;
@@ -105,11 +93,9 @@ export class SocketService {
 
   private initialize() {
     this.io.use(async (socket, next) => {
-      const cookie = parseCookieHeader(socket.handshake.headers.cookie);
       const token =
         (socket.handshake.auth?.token as string | undefined) ??
-        (socket.handshake.headers?.token as string | undefined) ??
-        cookie.auth_token;
+        (socket.handshake.headers?.token as string | undefined);
 
       if (token) {
         const isBlacklisted = await redis.get(`blacklist:${token}`);

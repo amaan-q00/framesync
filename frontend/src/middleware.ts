@@ -10,7 +10,7 @@ export function middleware(request: NextRequest) {
     pathname === '/' ||
     PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
 
-  const authToken = request.cookies.get('auth_token')?.value ?? request.cookies.get('fs_token')?.value;
+  const authToken = request.cookies.get('fs_token')?.value;
 
   if (!authToken && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url);

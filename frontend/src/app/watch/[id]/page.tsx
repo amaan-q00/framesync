@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import AppLogo from '@/components/ui/AppLogo';
 import { useDashboardSync } from '@/contexts/DashboardSyncContext';
 import { videoApi } from '@/lib/api';
-import { getToken } from '@/lib/authToken';
 import { useToast } from '@/hooks/useToast';
 import { useWatchSocket } from '@/hooks/useWatchSocket';
 import { useWatchRoom } from '@/hooks/useWatchRoom';
@@ -82,17 +81,6 @@ export default function WatchPage(): React.ReactElement {
   const { socket: guestSocket } = useWatchSocket(id, token, guestSocketEnabled);
   const socket = isAuthenticated ? mainSocket : guestSocket ?? null;
   const fps = video?.fps ?? 24;
-
-  // Append JWT to manifest URL when logged in so cross-origin manifest request gets auth (cookies not sent cross-site)
-  const manifestUrlForPlayer = useMemo(() => {
-    const url = video?.manifestUrl;
-    if (!url) return undefined;
-    if (url.includes('token=')) return url; // public link already has token
-    const authToken = getToken();
-    if (!authToken) return url;
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}auth=${encodeURIComponent(authToken)}`;
-  }, [video?.manifestUrl, isAuthenticated]);
 
   const {
     syncState,
@@ -792,7 +780,7 @@ export default function WatchPage(): React.ReactElement {
                 <HlsPlayer
                   key={manifestRetryKey}
                   ref={playerRef}
-                  manifestUrl={manifestUrlForPlayer ?? video.manifestUrl}
+                  manifestUrl={video.manifestUrl}
                   className="rounded-lg"
                   showNativeControls={false}
                   controlled={

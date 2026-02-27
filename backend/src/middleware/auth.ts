@@ -10,12 +10,12 @@ export interface AuthRequest extends Request {
   authToken?: string;
 }
 
-// cookie, Bearer header, or ?auth= (for manifest/GET when cross-origin cookies aren't sent)
+// JWT only: Bearer header, or ?auth= for GET (manifest – player can't send headers)
 export function getAuthToken(req: Request): string | undefined {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
   if (req.method === 'GET' && typeof req.query?.auth === 'string') return req.query.auth;
-  return req.cookies?.auth_token;
+  return undefined;
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {

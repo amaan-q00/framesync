@@ -24,10 +24,6 @@ const raw = cleanEnv(process.env, {
   VIDEO_RETENTION_HOURS: str({ default: '24' }),
   GOOGLE_CLIENT_ID: str({ default: '' }),
   GOOGLE_CLIENT_SECRET: str({ default: '' }),
-  COOKIE_SECURE: str({ choices: ['true', 'false'], default: 'false' }),
-  COOKIE_HTTPONLY: str({ choices: ['true', 'false'], default: 'true' }),
-  COOKIE_SAMESITE: str({ choices: ['strict', 'lax', 'none'], default: 'strict' }),
-  COOKIE_MAX_AGE: str({ default: '604800' }),
 });
 
 const encode = (s: string) => encodeURIComponent(s);

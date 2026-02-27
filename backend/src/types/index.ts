@@ -15,14 +15,6 @@ export interface TokenPayload {
   email: string;
 }
 
-export interface CookieOptions {
-  path?: string;
-  maxAge: number;
-  httpOnly: boolean;
-  secure: boolean;
-  sameSite: 'strict' | 'lax' | 'none';
-}
-
 export interface ProfileUpdateInput {
   name?: string;
   avatar_url?: string;

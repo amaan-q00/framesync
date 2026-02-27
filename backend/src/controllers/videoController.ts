@@ -14,9 +14,20 @@ import { redis } from '../config/redis';
 import { s3, s3Signer, BUCKET_NAME } from '../config/storage';
 import { addVideoJob } from '../services/queueService';
 import { SocketService } from '../services/socketService';
+import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/appError';
 import { AuthRequest } from '../middleware/auth';
 import { env } from '../config/env';
+
+const MANIFEST_TOKEN_EXPIRY = '5m';
+
+function createManifestToken(videoId: string, userId: number, email: string): string {
+  return jwt.sign(
+    { purpose: 'manifest', videoId, userId, email },
+    env.JWT_SECRET,
+    { expiresIn: MANIFEST_TOKEN_EXPIRY }
+  );
+}
 
 const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: string) => {
   const videoResult = await pool.query(
@@ -134,8 +145,16 @@ async function listSegmentKeys(videoId: string): Promise<string[]> {
 export const getManifest = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const { token } = req.query as { token?: string };
+  const authInQuery = req.query?.auth as string | undefined;
 
   try {
+    if (authInQuery) {
+      const decoded = jwt.decode(authInQuery) as { purpose?: string; videoId?: string; userId?: number } | null;
+      if (!decoded || decoded.purpose !== 'manifest' || decoded.videoId !== id || !decoded.userId) {
+        return next(new AppError('Invalid or expired manifest token', 403));
+      }
+    }
+
     const { access, video } = await checkVideoAccess(id, req.user?.userId, token);
     if (!access || !video) {
       return next(new AppError('Access Denied or Video Not Found', 403));
@@ -190,9 +209,12 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
       return next(new AppError('Access Denied or Video Not Found', 403));
     }
 
-    redis.incr(`video:views:${id}`).catch(err => 
-      console.error(`Redis View Incr Failed for ${id}`, err)
-  );
+    // Count at most one view per viewer per video per 24h (dedup by user, public token, or anon)
+    const viewerId = req.user?.userId ?? (token ? `pub:${token}` : 'anon');
+    const viewDedupKey = `video:viewed:${id}:${viewerId}`;
+    redis.set(viewDedupKey, '1', 'EX', 86400, 'NX').then((set) => {
+      if (set === 'OK') redis.incr(`video:views:${id}`).catch(err => console.error(`Redis View Incr Failed for ${id}`, err));
+    }).catch(() => {});
 
     const apiHost = env.API_URL;
     const manifestPath = `${apiHost}/api/videos/${id}/manifest.m3u8`;
@@ -204,7 +226,9 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
     const manifestUrl = playable
       ? isPublicAccess && token
         ? `${manifestPath}?token=${encodeURIComponent(token)}`
-        : manifestPath
+        : req.user?.userId
+          ? `${manifestPath}?auth=${createManifestToken(id, req.user.userId, req.user.email ?? '')}`
+          : manifestPath
       : undefined;
 
     const thumbnail_url = await toPresignedThumbnailUrl(video.thumbnail_path);

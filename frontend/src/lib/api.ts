@@ -173,12 +173,15 @@ export const videoApi = {
   ): Promise<{ status: string; data: { etag: string } }> => {
     const params = new URLSearchParams({ key, uploadId, partNumber: String(partNumber) });
     const url = `${API_BASE_URL}/api/videos/upload-part?${params}`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' };
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch(url, {
       method: 'POST',
       body: chunk,
       credentials: 'include',
       signal,
-      headers: { 'Content-Type': 'application/octet-stream' },
+      headers,
     });
     const data = await response.json();
     if (!response.ok) throw new ApiError(data.message || 'Upload part failed', response.status);

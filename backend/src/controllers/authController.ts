@@ -8,7 +8,7 @@ import { AuthService } from '../services/authService';
 import { RegisterSchema, LoginSchema } from '../schemas/auth.schema';
 import { AppError } from '../utils/appError';
 import { isValidEmailFormat } from '../utils/emailValidation';
-import { User, CookieOptions } from '../types';
+import { User } from '../types';
 import { AuthRequest, getAuthToken } from '../middleware/auth';
 import { toPresignedAssetUrl } from '../utils/presigned';
 
@@ -20,28 +20,11 @@ const googleOAuth2Client = new OAuth2Client(
   googleRedirectUri
 );
 
-const cookieOptions = (): CookieOptions => ({
-  path: '/',
-  maxAge: parseInt(env.COOKIE_MAX_AGE),
-  httpOnly: env.COOKIE_HTTPONLY === 'true',
-  secure: env.COOKIE_SECURE === 'true',
-  sameSite: env.COOKIE_SAMESITE as 'strict' | 'lax' | 'none',
-});
-
-const setAuthCookie = (res: Response, token: string) => {
-  res.cookie('auth_token', token, cookieOptions());
-};
-
-const clearAuthCookie = (res: Response) => {
-  res.clearCookie('auth_token', { path: '/', secure: env.COOKIE_SECURE === 'true', sameSite: env.COOKIE_SAMESITE as 'strict' | 'lax' | 'none' });
-};
-
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedData = RegisterSchema.parse(req.body);
     const result = await AuthService.register(validatedData);
-    
-    setAuthCookie(res, result.token);
+
     res.status(201).json({
       status: 'success',
       data: { user: result.user, token: result.token },
@@ -55,8 +38,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   try {
     const validatedData = LoginSchema.parse(req.body);
     const result = await AuthService.login(validatedData);
-
-    setAuthCookie(res, result.token);
 
     const avatar_url = await toPresignedAssetUrl(result.user.avatar_url, 604800);
     res.status(200).json({
@@ -114,7 +95,6 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
     });
 
     const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
-    setAuthCookie(res, jwtToken);
     const avatar_url = await toPresignedAssetUrl(user.avatar_url, 604800);
     res.status(200).json({
       status: 'success',
@@ -180,7 +160,6 @@ export const googleCallback = async (req: Request, res: Response, next: NextFunc
     });
 
     const jwtToken = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
-    setAuthCookie(res, jwtToken);
 
     const frontend = env.APP_URL.replace(/\/$/, '');
     res.redirect(302, `${frontend}/auth/callback?token=${encodeURIComponent(jwtToken)}`);
@@ -194,8 +173,6 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
   const token = getAuthToken(req);
 
   try {
-    clearAuthCookie(res);
-
     if (!token) {
       return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
     }
@@ -266,8 +243,6 @@ export const deleteMe = async (req: AuthRequest, res: Response, next: NextFuncti
     }
 
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-
-    clearAuthCookie(res);
 
     const token = getAuthToken(req);
     if (token) {
