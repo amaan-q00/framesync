@@ -11,10 +11,6 @@ function isPublicRoute(pathname: string | null): boolean {
   return PUBLIC_ROUTES.includes(pathname as (typeof PUBLIC_ROUTES)[number]);
 }
 
-/**
- * Renders the floating upload button only on protected pages (dashboard, settings, upload, etc.).
- * Hidden on login, register, home redirect, and watch page (upload runs in background with no control/redirect from watch).
- */
 export function UploadButtonGate(): React.ReactElement | null {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();

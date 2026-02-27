@@ -3,7 +3,6 @@
 import React from 'react';
 import AppLink from '@/components/ui/AppLink';
 
-/** Same graphic as public/framesync-logo.svg – inlined so header always shows; favicon uses the file. */
 function LogoIcon({ size = 32 }: { size?: number }) {
   return (
     <svg
@@ -32,7 +31,6 @@ function LogoIcon({ size = 32 }: { size?: number }) {
   );
 }
 
-/** App logo: public/framesync-logo.svg for favicon; header uses inlined same graphic. Links to /dashboard when href provided. */
 export interface AppLogoProps {
   href?: string;
   className?: string;

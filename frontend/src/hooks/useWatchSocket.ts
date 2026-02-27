@@ -10,10 +10,6 @@ export interface UseWatchSocketResult {
   connected: boolean;
 }
 
-/**
- * Guest socket for the watch page: connects with public link token + videoId
- * so unauthenticated users can join the video room and receive real-time comments.
- */
 export function useWatchSocket(
   videoId: string,
   publicToken: string | undefined,

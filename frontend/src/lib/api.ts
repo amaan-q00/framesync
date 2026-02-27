@@ -14,7 +14,6 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Simple event emitter for auth errors
 type AuthErrorListener = () => void;
 const authErrorListeners: AuthErrorListener[] = [];
 
@@ -65,7 +64,6 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
-      // Emit auth error on 401 to trigger logout/redirect
       if (response.status === 401) {
         emitAuthError();
       }
@@ -166,7 +164,6 @@ export const videoApi = {
     });
   },
 
-  /** Proxy upload part (backend PUTs to B2) to avoid CORS when frontend and B2 are cross-origin. */
   uploadPart: async (
     key: string,
     uploadId: string,

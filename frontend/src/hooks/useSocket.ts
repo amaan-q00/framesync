@@ -11,10 +11,6 @@ export interface UseSocketResult {
   connected: boolean;
 }
 
-/**
- * Connects to the backend Socket.IO server when the user is authenticated.
- * Uses cookie or Bearer token (for cross-origin when cookies are blocked).
- */
 export function useSocket(isAuthenticated: boolean): UseSocketResult {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);

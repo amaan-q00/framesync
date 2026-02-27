@@ -7,7 +7,6 @@ import { s3, BUCKET_NAME } from '../config/storage';
 import { toPresignedAssetUrl } from '../utils/presigned';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
-// GET /api/profile/me - Get current user profile
 export const getProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const result = await pool.query(
@@ -30,13 +29,11 @@ export const getProfile = async (req: AuthRequest, res: Response, next: NextFunc
   }
 };
 
-// PUT /api/profile/me - Update user profile
 export const updateProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { name, avatar_url }: ProfileUpdateInput = req.body;
     const userId = req.user?.userId;
 
-    // Build dynamic update query
     const updates: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
@@ -81,7 +78,6 @@ export const updateProfile = async (req: AuthRequest, res: Response, next: NextF
   }
 };
 
-// POST /api/profile/avatar - Upload avatar image
 export const uploadAvatar = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.file || !req.file.buffer) {
@@ -91,7 +87,6 @@ export const uploadAvatar = async (req: AuthRequest, res: Response, next: NextFu
     const file = req.file;
     const userId = req.user?.userId;
 
-    // Validate file type (only images)
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
       return next(new AppError('Invalid file type. Only JPEG, PNG, and WebP are allowed', 400));
@@ -103,12 +98,10 @@ export const uploadAvatar = async (req: AuthRequest, res: Response, next: NextFu
       return next(new AppError('File too large. Maximum size is 5MB', 400));
     }
 
-    // Generate unique filename
     const fileExtension = file.originalname.split('.').pop();
     const fileName = `avatar_${userId}_${Date.now()}.${fileExtension}`;
     const key = `avatars/${fileName}`;
 
-    // Upload to S3
     const uploadParams = {
       Bucket: BUCKET_NAME,
       Key: key,
@@ -118,7 +111,6 @@ export const uploadAvatar = async (req: AuthRequest, res: Response, next: NextFu
 
     await s3.send(new PutObjectCommand(uploadParams));
 
-    // Store key only; presigned URLs generated when serving
     await pool.query(
       'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
       [key, userId]

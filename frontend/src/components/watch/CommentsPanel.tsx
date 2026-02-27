@@ -21,7 +21,6 @@ export interface MarkerSegment {
 export interface MarkerModeState {
   segments: MarkerSegment[];
   label: string;
-  /** When set: video is frozen, user is drawing this segment */
   segmentStartTime?: number;
   segmentStrokes: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }>;
 }
@@ -42,9 +41,7 @@ export interface CommentsPanelProps {
   addComment: (c: Comment) => void;
   removeComment: (commentId: string) => void;
   onError: (msg: string) => void;
-  /** Seek to time; if comment provided (marker/shape), parent may play to end of marker then pause */
   onSeekToTimestamp?: (timestamp: number, comment?: Comment) => void;
-  /** Quick marker = 1s at current time (captured on click); popup asks for label. */
   markerMode: MarkerModeState | null;
   quickMarkerPopup: { timestamp: number } | null;
   endMarkerPopup: { segments: MarkerSegment[] } | null;
@@ -101,7 +98,6 @@ export function CommentsPanel({
   const [popupLabel, setPopupLabel] = useState('');
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  /** Cannot add normal comments while in any marker flow or while a marker popup is open. */
   const markerFlowActive = markerMode != null || quickMarkerPopup != null || endMarkerPopup != null;
 
   const needsGuestName = isGuest && canAddComment && !guestName;
@@ -268,7 +264,6 @@ export function CommentsPanel({
         })}
         <div ref={commentsEndRef} />
       </div>
-      {/* Label popup: Quick marker (time already captured) or End marker (segments already captured) */}
       {(quickMarkerPopup != null || endMarkerPopup != null) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="marker-popup-title">
           <div className="bg-elevated border border-border rounded-lg shadow-xl max-w-sm w-full p-4 space-y-3">

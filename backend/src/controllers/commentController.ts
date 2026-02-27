@@ -5,8 +5,6 @@ import { AuthRequest } from "../middleware/auth";
 import { SocketService } from "../services/socketService";
 import { toPresignedAssetUrl } from "../utils/presigned";
 
-// Permission helper: same access logic as checkVideoAccess (owner, team, public).
-// canAddComment: anyone with access; canAddMarkers: owner or editor only (not viewers).
 const getCommentPermissions = async (
   videoId: string,
   userId?: number,
@@ -19,12 +17,10 @@ const getCommentPermissions = async (
   if (videoRes.rowCount === 0) return { canAddComment: false, canAddMarkers: false };
   const video = videoRes.rows[0];
 
-  // 1. Owner
   if (userId && video.user_id === userId) {
     return { canAddComment: true, canAddMarkers: true };
   }
 
-  // 2. Team (editor or viewer)
   if (userId) {
     const shareRes = await pool.query(
       "SELECT role FROM video_shares WHERE video_id = $1 AND user_id = $2",
@@ -39,7 +35,6 @@ const getCommentPermissions = async (
     }
   }
 
-  // 3. Public (editor or viewer via token)
   if (video.is_public && video.public_token === token) {
     const role = (video.public_role as string) || "viewer";
     return {
@@ -51,7 +46,6 @@ const getCommentPermissions = async (
   return { canAddComment: false, canAddMarkers: false };
 };
 
-// POST /api/videos/:id/comments
 export const addComment = async (
   req: AuthRequest,
   res: Response,
@@ -63,7 +57,6 @@ export const addComment = async (
   const { token } = req.query as { token?: string };
 
   try {
-    // 1. Check Permissions (anyone with access can add comment; only editor/owner can add markers)
     const { canAddComment, canAddMarkers } = await getCommentPermissions(
       id,
       req.user?.userId,
@@ -90,12 +83,10 @@ export const addComment = async (
       );
     }
 
-    // 2. Validate Guest Name
     if (!req.user && !guestName) {
       return next(new AppError("Guest name is required", 400));
     }
 
-    // 3. Get Video FPS (Critical for sync)
     const videoMeta = await pool.query("SELECT fps FROM videos WHERE id = $1", [
       id,
     ]);
@@ -104,7 +95,6 @@ export const addComment = async (
 
     const fps = videoMeta.rows[0].fps || 24.0;
 
-    // 4. Calculate Frame Data (markers/shapes: at least 1 second visibility)
     const frameNumber = Math.round(parseFloat(timestamp) * fps);
     let durationFrames = duration
       ? Math.round(parseFloat(duration) * fps)
@@ -114,7 +104,6 @@ export const addComment = async (
       durationFrames = Math.max(durationFrames, minFrames);
     }
 
-    // 5. Normalize drawing_data for JSONB: array of strokes (legacy) or { segments: [{ startTime, endTime, strokes }] }
     let drawingDataForDb: string | null = null;
     if (drawing_data != null) {
       try {
@@ -137,7 +126,6 @@ export const addComment = async (
       }
     }
 
-    // 6. Insert with Frame Data (cast $9 to jsonb when string for pg)
     const result = await pool.query(
       `INSERT INTO comments 
         (video_id, user_id, guest_name, text, timestamp, frame_number, duration_frames, type, drawing_data, color)
@@ -149,7 +137,7 @@ export const addComment = async (
         req.user ? null : guestName,
         text ?? "",
         timestamp,
-        frameNumber, // The Source of Truth
+        frameNumber,
         durationFrames,
         commentType,
         drawingDataForDb,
@@ -159,14 +147,12 @@ export const addComment = async (
 
     const savedComment = result.rows[0];
 
-    // --- 6. SOCKET BROADCAST (THE BRIDGE) ---
     try {
       const io = SocketService.getInstance().getIO();
 
       let userName = guestName || "Guest";
       let userAvatar = null;
 
-      // If logged in, we need to FETCH the name/avatar for the broadcast
       if (req.user?.userId) {
         const userRes = await pool.query(
           "SELECT name, avatar_url FROM users WHERE id = $1",
@@ -199,7 +185,6 @@ export const addComment = async (
   }
 };
 
-// GET /api/videos/:id/comments
 export const getComments = async (
   req: AuthRequest,
   res: Response,
@@ -228,7 +213,6 @@ export const getComments = async (
   }
 };
 
-// DELETE /api/videos/:id/comments/:commentId
 export const deleteComment = async (
   req: AuthRequest,
   res: Response,
@@ -252,20 +236,15 @@ export const deleteComment = async (
     const { author_id, author_guest_name, owner_id } = check.rows[0];
     const currentUserId = req.user?.userId;
 
-    // Owner can delete any comment
     if (currentUserId !== undefined && currentUserId === owner_id) {
-      // allowed
     } else if (author_id != null && currentUserId === author_id) {
-      // Non-owner: can delete own (logged-in author)
     } else if (author_id == null && author_guest_name != null && guestName != null && author_guest_name === guestName) {
-      // Guest: can delete own comment by matching guest_name
     } else {
       return next(new AppError("You can only delete your own comments", 403));
     }
 
     await pool.query("DELETE FROM comments WHERE id = $1", [commentId]);
 
-    // Broadcast Deletion
     try {
       const io = SocketService.getInstance().getIO();
       io.to(id).emit("delete_comment", { commentId });

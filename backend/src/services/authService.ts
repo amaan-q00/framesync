@@ -15,7 +15,6 @@ export class AuthService {
       throw new AppError('Please use a permanent email address. Disposable or temporary email addresses are not allowed.', 400);
     }
 
-    // Check for duplicate email
     const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existingUser.rowCount && existingUser.rowCount > 0) {
       throw new AppError('Email already in use', 409);
@@ -46,15 +45,8 @@ export class AuthService {
   static async login(input: LoginInput): Promise<{ user: SafeUser; token: string }> {
     const result = await pool.query<User>('SELECT * FROM users WHERE email = $1', [input.email]);
     const user = result.rows[0];
-
-    // FIX LOGIC:
-    // 1. Check if user exists (!user)
-    // 2. Check if user has a password (!user.password_hash) <-- Handles Google-only users
-    // 3. Compare password
-    
-    // We assign strict boolean to avoid TS screaming
     const hasPassword = user && user.password_hash;
-    const isValid = hasPassword && (await bcrypt.compare(input.password, user.password_hash!)); // Force unwrap ! because we checked hasPassword
+    const isValid = hasPassword && (await bcrypt.compare(input.password, user.password_hash!));
 
     if (!user || !hasPassword || !isValid) {
       throw new AppError('Invalid email or password', 401);
@@ -66,7 +58,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
-      avatar_url: user.avatar_url, // Include avatar now
+      avatar_url: user.avatar_url,
       created_at: user.created_at
     };
 

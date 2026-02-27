@@ -28,7 +28,7 @@ app.use(cors({
 
 app.use(cookieParser());
 
-// Stream upload-part body to B2 (no buffering); must be before express.json() so body stays a stream
+// upload-part: keep body as stream (before json parser)
 app.post('/api/videos/upload-part', protect, uploadPart);
 
 app.use(express.json());
@@ -45,13 +45,11 @@ app.use(globalErrorHandler);
 
 const init = async () => {
   try {
-    // 1. Database
     await pool.query('SELECT 1');
     console.log('Database Connected');
     await createTables();
     await initStorage();
 
-    // 2. Storage Setup (Bucket creation)
     try {
       await s3.send(new CreateBucketCommand({ Bucket: BUCKET_NAME }));
       console.log(`Bucket '${BUCKET_NAME}' ready`);
@@ -59,17 +57,12 @@ const init = async () => {
       if (e.Code !== 'BucketAlreadyOwnedByYou') throw e;
     }
 
-    // 3. Worker
     initWorker();
-
-    // 5. Cron
     initCronJobs();
 
-    // 6. HTTP server and Socket.IO
     const server = http.createServer(app);
     new SocketService(server);
 
-    // 7. Listen
     server.listen(env.PORT, () => {
       console.log(`Server running on port ${env.PORT}`);
     });

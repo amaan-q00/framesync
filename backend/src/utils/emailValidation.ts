@@ -1,12 +1,6 @@
-/**
- * Backend-only email validation (no external API).
- * - Format validation for delete-account confirmation and general use.
- * - Disposable/temporary domain blocklist at signup to keep emails "genuine".
- */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAIL_LENGTH = 254;
 
-/** Well-known disposable/temporary email domains (lowercase). Add more as needed. */
 const DISPOSABLE_DOMAINS = new Set([
   '10minutemail.com', '10minutemail.net', 'guerrillamail.com', 'guerrillamail.org',
   'mailinator.com', 'mailinator.net', 'tempmail.com', 'tempmail.net', 'throwaway.email',
@@ -26,7 +20,6 @@ export function isValidEmailFormat(email: string): boolean {
   return trimmed.length > 0 && trimmed.length <= MAX_EMAIL_LENGTH && EMAIL_REGEX.test(trimmed);
 }
 
-/** Returns true if the email's domain is a known disposable/temporary provider. */
 export function isDisposableEmail(email: string): boolean {
   if (typeof email !== 'string') return true;
   const domain = getDomainFromEmail(email.trim());

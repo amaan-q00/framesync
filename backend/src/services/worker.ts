@@ -24,9 +24,7 @@ function emitVideoStatus(
   try {
     const io = SocketService.getInstance().getIO();
     io.to(`user:${ownerUserId}`).emit('video:status', { videoId, status });
-  } catch {
-    // SocketService not initialized (e.g. worker in separate process)
-  }
+  } catch { }
 }
 
 const TMP_BASE = path.resolve('temp');
@@ -44,7 +42,6 @@ const uploadFile = async (localPath: string, bucketKey: string, contentType: str
   }));
 };
 
-/** One lightweight ffprobe to get FPS and duration (metadata only, no decode). */
 const probeVideo = (url: string): Promise<{ fps: number; duration: number }> => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(url, (err, metadata) => {
@@ -61,10 +58,7 @@ const probeVideo = (url: string): Promise<{ fps: number; duration: number }> => 
   });
 };
 
-/**
- * Single ffmpeg run: decode input once, output thumbnail + HLS.
- * Saves memory (one decode pipeline, one process) and avoids reading the source twice.
- */
+// one ffmpeg pass: thumb + HLS, no double read
 const runThumbnailAndHls = (
   inputUrl: string,
   thumbPath: string,
@@ -100,7 +94,6 @@ const runThumbnailAndHls = (
 
 const processVideo = async (job: Job) => {
   const { videoId, bucketPath } = job.data;
-  // console.log(`Starting HLS conversion for ${videoId}...`);
 
   const videoDir = path.join(TMP_BASE, `hls-${videoId}`);
   if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir);
@@ -111,22 +104,16 @@ const processVideo = async (job: Job) => {
   try {
     await pool.query("UPDATE videos SET status = 'processing' WHERE id = $1", [videoId]);
 
-    // 1. Get Input Stream URL
     const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: bucketPath });
     const inputUrl = await getSignedUrl(s3, command, { expiresIn: 7200 });
 
-    // 2. One ffprobe for metadata (no decode)
     const { fps, duration } = await probeVideo(inputUrl);
     await pool.query(
       'UPDATE videos SET fps = $1, duration = $2 WHERE id = $3',
       [fps, duration, videoId]
     );
 
-    // 3. Upload poller: stream .ts segments to S3 as they appear.
-    // Upload when a file's mtime has been unchanged for STABLE_MS (treat as complete). Safe because
-    // ffmpeg writes each segment in one go and closes it; we avoid uploading the in-progress segment.
-    // Trade-off: if a segment were written over >STABLE_MS (very rare), we could upload partial
-    // data; 2s is a conservative margin. Final cleanup (step 5) still uploads any remaining files.
+    // upload .ts as they stabilise (mtime unchanged 2s) so we dont grab half-written file
     const STABLE_MS = 2000;
     const uploaderInterval = setInterval(async () => {
       try {
@@ -152,7 +139,6 @@ const processVideo = async (job: Job) => {
       }
     }, 5000);
 
-    // 4. Single ffmpeg: decode once → thumbnail + HLS (saves memory and avoids double read)
     const thumbPath = path.join(videoDir, 'thumb.jpg');
     await runThumbnailAndHls(inputUrl, thumbPath, outputUrl, fps, duration);
     clearInterval(uploaderInterval);
@@ -166,7 +152,6 @@ const processVideo = async (job: Job) => {
       console.error(`Thumbnail upload failed for ${videoId}:`, thumbErr);
     }
 
-    // 5. Final Cleanup and Manifest Upload
     const finalFiles = await readdir(videoDir);
     for (const file of finalFiles) {
       const filePath = path.join(videoDir, file);
@@ -178,7 +163,6 @@ const processVideo = async (job: Job) => {
       if (fs.existsSync(filePath)) await unlink(filePath);
     }
 
-    // 6. Update Database with Status, Metadata and Thumbnail
     const manifestPath = `videos/${videoId}/index.m3u8`;
     const updateRes = await pool.query(
       `UPDATE videos 
@@ -194,7 +178,6 @@ const processVideo = async (job: Job) => {
     const ownerUserId = updateRes.rows[0]?.user_id as number | undefined;
     emitVideoStatus(videoId, 'ready', ownerUserId);
 
-    // 7. Delete Raw Source File to Save Storage
     try {
       await s3.send(new DeleteObjectCommand({
         Bucket: BUCKET_NAME,

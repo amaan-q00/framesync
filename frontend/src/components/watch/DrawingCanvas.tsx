@@ -8,28 +8,18 @@ const DEFAULT_STROKE_COLOR = '#FF0000';
 const STROKE_WIDTH = 3;
 
 export interface DrawingCanvasProps {
-  /** Canvas fills this container; draw only when enabled (live lock or marker mode) */
   iHaveLock: boolean;
-  /** When true, user is adding a marker: canvas collects strokes locally, no socket */
   markerModeActive?: boolean;
-  /** Strokes collected during marker mode (controlled by parent) */
   markerStrokes?: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }>;
-  /** In-progress marker segments for preview (show strokes when currentTime is in segment range) */
   markerPreviewSegments?: Array<{ startTime: number; endTime: number; strokes: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }> }>;
   strokeColor?: string;
   remoteStrokes: DrawingStrokePayload[];
-  /** Ephemeral live annotations (auto-clear after ~1s); only in live mode */
   ephemeralStrokes?: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }>;
-  /** When true, user can draw ephemeral strokes (no lock) in live mode */
   canDrawEphemeral?: boolean;
-  /** When true, strokes are ephemeral (not added to sessionStrokes so they disappear after TTL) */
   isEphemeralStroke?: boolean;
-  /** Comments with type shape or marker to render when in frame range */
   shapeComments: Comment[];
   currentFrame: number;
-  /** Current time in seconds (for visibility; drawings stay at least 1s) */
   currentTime: number;
-  /** Video FPS (used to enforce min 1s visibility for legacy comments) */
   fps: number;
   onStroke: (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => void;
   onMarkerStroke?: (stroke: { points: Array<{ x: number; y: number }>; color: string; width: number }) => void;
@@ -95,7 +85,6 @@ export function DrawingCanvas({
     []
   );
 
-  // Resize canvas to match container
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -134,7 +123,6 @@ export function DrawingCanvas({
       .filter((x): x is { startTime: number; endTime: number; strokes: VectorStroke[] } => x != null);
   };
 
-  // Visibility: every drawing stays at least 1 second (or its duration if longer)
   const minDurationSec = 1;
   const visibleShapes = shapeComments.filter((c) => {
     if ((c.type !== 'shape' && c.type !== 'marker') || !c.drawing_data) return false;
@@ -180,7 +168,6 @@ export function DrawingCanvas({
     ...(markerModeActive ? markerStrokes : []),
   ];
 
-  // Redraw when strokes or size change
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;

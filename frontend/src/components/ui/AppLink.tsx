@@ -7,7 +7,6 @@ import type { ComponentPropsWithoutRef } from 'react';
 
 type NextLinkProps = ComponentPropsWithoutRef<typeof NextLink>;
 
-/** Use for in-app navigation. Prefer over <a> for client-side routing and type-safe hrefs. */
 export interface AppLinkProps extends Omit<NextLinkProps, 'href'> {
   href: AppRoute | NextLinkProps['href'];
   children: React.ReactNode;

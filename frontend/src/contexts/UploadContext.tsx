@@ -41,7 +41,6 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
   });
   const { user } = useAuth();
 
-  // Cancel and clear all uploads when user logs out or becomes unauthenticated
   useEffect(() => {
     if (!user) {
       uploadHook.clearUploads();

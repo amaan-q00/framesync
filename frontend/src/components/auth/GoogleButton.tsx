@@ -9,10 +9,6 @@ interface GoogleButtonProps {
   disabled?: boolean;
 }
 
-/**
- * Sign in with Google: frontend just sends the user to the backend.
- * Backend redirects to Google, then back to /api/auth/google/callback, sets cookie, redirects to /dashboard.
- */
 const GoogleButton: React.FC<GoogleButtonProps> = ({ disabled = false }) => {
   return (
     <a

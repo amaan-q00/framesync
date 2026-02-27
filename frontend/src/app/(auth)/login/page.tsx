@@ -64,7 +64,6 @@ export default function LoginPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
     if (errors[name as keyof LoginCredentials]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }

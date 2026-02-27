@@ -1,12 +1,5 @@
-/**
- * Client-side token storage for cross-origin auth when cookies are blocked.
- * Token is stored in a cookie (fs_token) on the frontend domain so:
- * - Next.js middleware can read it for route protection
- * - API calls can send it via Authorization: Bearer
- */
-
 const TOKEN_KEY = 'fs_token';
-const TOKEN_MAX_AGE = 60 * 60 * 24 * 7; // 7 days in seconds
+const TOKEN_MAX_AGE = 60 * 60 * 24 * 7;
 
 export function setToken(token: string): void {
   if (typeof document === 'undefined') return;

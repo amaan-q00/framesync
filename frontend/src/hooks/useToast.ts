@@ -35,7 +35,6 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setToasts(prev => [...prev, newToast]);
     
-    // Auto remove after duration (only if duration is not 0)
     if (toast.duration !== 0) {
       setTimeout(() => {
         removeToast(id);

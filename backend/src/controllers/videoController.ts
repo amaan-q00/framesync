@@ -18,9 +18,7 @@ import { AppError } from '../utils/appError';
 import { AuthRequest } from '../middleware/auth';
 import { env } from '../config/env';
 
-// --- HELPER: ACCESS CONTROL ---
 const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: string) => {
-  // 1. Fetch Video + Owner
   const videoResult = await pool.query(
     `SELECT v.*, u.email as owner_email 
      FROM videos v 
@@ -32,12 +30,10 @@ const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: 
   if (videoResult.rowCount === 0) return { access: false, role: null, video: null, isPublicAccess: false };
   const video = videoResult.rows[0];
 
-  // 2. Case A: Owner (Full Access)
   if (userId && video.user_id === userId) {
     return { access: true, role: 'owner', video, isPublicAccess: false };
   }
 
-  // 3. Case B: Team Member (Editor/Viewer)
   if (userId) {
     const shareResult = await pool.query(
       'SELECT role FROM video_shares WHERE video_id = $1 AND user_id = $2',
@@ -48,7 +44,6 @@ const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: 
     }
   }
 
-  // 4. Case C: Public Guest (Editor/Viewer via Token)
   if (video.is_public && video.public_token === publicToken) {
     return { access: true, role: video.public_role, video, isPublicAccess: true };
   }
@@ -56,9 +51,6 @@ const checkVideoAccess = async (videoId: string, userId?: number, publicToken?: 
   return { access: false, role: null, video: null, isPublicAccess: false };
 };
 
-// --- READ ROUTES ---
-
-// GET /api/videos/my-works?limit=5&offset=0&search=...
 export const getMyWorks = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
@@ -89,7 +81,6 @@ export const getMyWorks = async (req: AuthRequest, res: Response, next: NextFunc
   }
 };
 
-// GET /api/videos/shared-with-me?limit=5&offset=0&search=...
 export const getSharedWithMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
@@ -124,10 +115,9 @@ export const getSharedWithMe = async (req: AuthRequest, res: Response, next: Nex
   }
 };
 
-const HLS_SEGMENT_DURATION = 10; // matches worker -hls_time 10
-const MIN_SEGMENTS_FOR_PLAYABLE = 1; // only expose manifest when at least this many chunks exist
+const HLS_SEGMENT_DURATION = 10;
+const MIN_SEGMENTS_FOR_PLAYABLE = 1;
 
-/** Returns sorted .ts segment keys for a video (empty if none). */
 async function listSegmentKeys(videoId: string): Promise<string[]> {
   const prefix = `videos/${videoId}/`;
   const listResult = await s3.send(new ListObjectsV2Command({
@@ -141,7 +131,6 @@ async function listSegmentKeys(videoId: string): Promise<string[]> {
     .sort();
 }
 
-// GET /api/videos/:id/manifest.m3u8 (Progressive HLS playlist)
 export const getManifest = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const { token } = req.query as { token?: string };
@@ -190,7 +179,6 @@ export const getManifest = async (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
-// GET /api/videos/:id (Watch Page)
 export const getVideo = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const { token } = req.query as { token?: string }; 
@@ -202,7 +190,6 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
       return next(new AppError('Access Denied or Video Not Found', 403));
     }
 
-    // Increment View Count (Optimized with Redis)
     redis.incr(`video:views:${id}`).catch(err => 
       console.error(`Redis View Incr Failed for ${id}`, err)
   );
@@ -226,7 +213,7 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
       status: 'success',
       data: {
         ...video,
-        role, // 'owner', 'editor', 'viewer'
+        role,
         manifestUrl,
         thumbnail_url,
         isPublicAccess: Boolean(isPublicAccess),
@@ -238,9 +225,6 @@ export const getVideo = async (req: AuthRequest, res: Response, next: NextFuncti
   }
 };
 
-// --- SHARING ROUTES ---
-
-// POST /api/videos/:id/share (Invite Team)
 export const shareVideo = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const { email, role } = req.body; 
@@ -270,16 +254,13 @@ export const shareVideo = async (req: AuthRequest, res: Response, next: NextFunc
 
     try {
       SocketService.getInstance().getIO().to(`user:${targetUserId}`).emit('share:added', { videoId: id });
-    } catch {
-      // Socket not initialized
-    }
+    } catch { }
     res.status(200).json({ status: 'success', message: 'User added to video' });
   } catch (error) {
     next(error);
   }
 };
 
-// DELETE /api/videos/:id/share (Remove Team)
 export const removeShare = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const { userId } = req.body; 
@@ -293,22 +274,16 @@ export const removeShare = async (req: AuthRequest, res: Response, next: NextFun
      await pool.query('DELETE FROM video_shares WHERE video_id = $1 AND user_id = $2', [id, userId]);
      try {
        SocketService.getInstance().getIO().to(`user:${userId}`).emit('share:removed', { videoId: id });
-     } catch {
-       // Socket not initialized
-     }
+     } catch { }
      res.status(200).json({ status: 'success', message: 'User removed' });
   } catch (error) {
     next(error);
   }
 };
 
-// POST /api/videos/:id/public (Toggle Public Link)
-// When public access is updated or modified in any way, we nullify all previous public links:
-// - If enabling or keeping enabled: always generate a new token (invalidates old links).
-// - If disabling: set token to null.
 export const updatePublicAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
-  const { enabled, role } = req.body; // 'viewer' or 'editor'
+  const { enabled, role } = req.body;
 
   try {
     const videoCheck = await pool.query('SELECT user_id FROM videos WHERE id = $1', [id]);
@@ -318,11 +293,7 @@ export const updatePublicAccess = async (req: AuthRequest, res: Response, next: 
 
     let token: string | null = null;
 
-    if (enabled) {
-      // Any update/modification with public on: generate a fresh token so all previous public links are nullified.
-      token = randomBytes(16).toString('hex');
-    }
-    // If enabled is false: token stays null, all public links are invalidated.
+    if (enabled) token = randomBytes(16).toString('hex');
 
     await pool.query(
       'UPDATE videos SET is_public = $1, public_token = $2, public_role = $3 WHERE id = $4',
@@ -338,7 +309,6 @@ export const updatePublicAccess = async (req: AuthRequest, res: Response, next: 
   }
 };
 
-// GET /api/videos/:id/shares (List users with access – owner only)
 export const getVideoShares = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   try {
@@ -360,7 +330,6 @@ export const getVideoShares = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
-// Helper: delete all S3 objects under a prefix (used for video + thumbnail cleanup)
 const deleteS3Prefix = async (prefix: string): Promise<void> => {
   const listResult = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET_NAME, Prefix: prefix }));
   if (!listResult.Contents?.length) return;
@@ -371,7 +340,6 @@ const deleteS3Prefix = async (prefix: string): Promise<void> => {
   if (listResult.IsTruncated) await deleteS3Prefix(prefix);
 };
 
-// DELETE /api/videos/:id (Owner only – deletes video and cascades, plus S3 video + thumbnail)
 export const deleteVideo = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   try {
@@ -393,16 +361,13 @@ export const deleteVideo = async (req: AuthRequest, res: Response, next: NextFun
       const io = SocketService.getInstance().getIO();
       io.to(`user:${ownerId}`).emit('video:deleted', { videoId: id });
       sharedUserIds.forEach((uid) => io.to(`user:${uid}`).emit('video:deleted', { videoId: id }));
-    } catch {
-      // Socket not initialized
-    }
+    } catch { }
     res.status(200).json({ status: 'success', message: 'Video deleted' });
   } catch (error) {
     next(error);
   }
 };
 
-// DELETE /api/videos/:id/share/me (Recipient removes their own access)
 export const removeMyShare = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { id } = req.params as { id: string };
   const userId = req.user?.userId;
@@ -419,9 +384,7 @@ export const removeMyShare = async (req: AuthRequest, res: Response, next: NextF
     if (ownerId != null) {
       try {
         SocketService.getInstance().getIO().to(`user:${ownerId}`).emit('share:removed', { videoId: id });
-      } catch {
-        // Socket not initialized
-      }
+      } catch { }
     }
     res.status(200).json({ status: 'success', message: 'Access removed' });
   } catch (error) {
@@ -429,7 +392,6 @@ export const removeMyShare = async (req: AuthRequest, res: Response, next: NextF
   }
 };
 
-// --- UPLOAD LOGIC ---
 export const initializeMultipart = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { fileName, fileType, title, description } = req.body;
   const userId = req.user?.userId;
@@ -489,7 +451,6 @@ export const signPart = async (req: AuthRequest, res: Response, next: NextFuncti
   }
 };
 
-/** Proxy upload part: pass req stream directly to S3 (same as reference). */
 export const uploadPart = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const key = req.query.key as string;
   const uploadId = req.query.uploadId as string;

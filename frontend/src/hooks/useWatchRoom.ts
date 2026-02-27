@@ -12,21 +12,15 @@ import type {
 } from '@/types/watch';
 
 export interface WatchRoomSyncState {
-  /** Latest sync timestamp (seconds) from host */
   syncTime: number;
-  /** Latest play/pause from host */
   syncPlaying: boolean;
-  /** From room_state: time for late joiners */
   initialTime: number;
-  /** From room_state: status for late joiners */
   initialStatus: 'playing' | 'paused';
-  /** Whether we have received room_state at least once (so player can apply initial) */
   hasRoomState: boolean;
   isLive: boolean;
   hostId: number | null;
   hostName: string | null;
   lockedBy: string | null;
-  /** Set when someone requested to become host; only host should show "Hand over" */
   pendingHostRequest: { userId: number; userName: string } | null;
 }
 
@@ -117,7 +111,6 @@ export function useWatchRoom(
     setRemoteStrokes([]);
   }, []);
 
-  // Join room when socket and videoId are ready
   useEffect(() => {
     if (!socket || !videoId) return;
     socket.emit('join_room', videoId);
@@ -129,7 +122,6 @@ export function useWatchRoom(
     };
   }, [socket, videoId]);
 
-  // Socket listeners
   useEffect(() => {
     if (!socket || !videoId) return;
 
@@ -274,7 +266,6 @@ export function useWatchRoom(
     };
   }, [socket, videoId, addComment, removeComment, onError, pushActivity]);
 
-  // Prune ephemeral strokes older than TTL
   useEffect(() => {
     if (!socket || !videoId) return;
     const iv = setInterval(() => {

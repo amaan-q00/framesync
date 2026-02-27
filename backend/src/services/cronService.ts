@@ -5,20 +5,15 @@ import { s3, BUCKET_NAME } from '../config/storage';
 import { env } from '../config/env';
 import { ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 
-// Configurable Retention Period
 const RETENTION_HOURS = parseInt(env.VIDEO_RETENTION_HOURS || '24');
 
 export const initCronJobs = () => {
   console.log('Initializing System Cron Jobs...');
 
-  // 1. VIEW SYNC (Every Minute)
-  // Flushes Redis view counts to Postgres
   cron.schedule('* * * * *', async () => {
     await syncViews();
   });
 
-  // 2. CLEANUP (Every Hour)
-  // Deletes expired temp videos from S3 and DB
   cron.schedule('0 * * * *', async () => {
     console.log('Running Hourly Cleanup Job...');
     await cleanupExpiredVideos();
@@ -28,23 +23,17 @@ export const initCronJobs = () => {
   console.log(`- Cleanup: Active (Older than ${RETENTION_HOURS} hours)`);
 };
 
-// --- JOB 1: VIEW ANALYTICS SYNC ---
 const syncViews = async () => {
   try {
-    // Scan for all view keys
-    // Note: In extremely high-load Redis, use SCAN instead of KEYS
     const keys = await redis.keys('video:views:*');
     if (keys.length === 0) return;
 
     for (const key of keys) {
-      // Atomically get the value and reset it to 0
       const viewsToAdd = await redis.getset(key, '0');
       const count = parseInt(viewsToAdd || '0', 10);
 
       if (count > 0) {
         const videoId = key.split(':')[2];
-        
-        // Batch updates could be optimized further, but this is fine for now
         await pool.query(
           'UPDATE videos SET views = views + $1 WHERE id = $2',
           [count, videoId]
@@ -56,7 +45,6 @@ const syncViews = async () => {
   }
 };
 
-// --- JOB 2: VIDEO CLEANUP ---
 const cleanupExpiredVideos = async () => {
   try {
     const result = await pool.query(
@@ -83,7 +71,6 @@ const cleanupExpiredVideos = async () => {
   }
 };
 
-// Helper: Delete S3 Folder
 const deleteFolder = async (prefix: string) => {
   try {
     const listCommand = new ListObjectsV2Command({

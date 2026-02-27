@@ -3,21 +3,13 @@ export interface Video {
   user_id: number;
   title: string;
   description?: string;
-
-  // Storage
   bucket_path: string;
   thumbnail_path?: string;
   thumbnail_url?: string | null;
-
-  // Metadata
   fps: number;
   duration: number;
-
-  // State
   status: 'uploading' | 'queued' | 'processing' | 'ready' | 'failed';
   views: number;
-
-  // Access Control
   is_public: boolean;
   public_token?: string;
   public_role: 'viewer' | 'editor';
@@ -25,13 +17,11 @@ export interface Video {
   created_at: Date;
 }
 
-/** List item for "My Works" – may include thumbnail_url from API */
 export type MyWorkVideo = Pick<
   Video,
   'id' | 'title' | 'thumbnail_path' | 'thumbnail_url' | 'status' | 'views' | 'created_at' | 'is_public' | 'public_token' | 'public_role'
 >;
 
-/** List item for "Shared with me" – includes owner and your role */
 export interface SharedWithMeVideo extends MyWorkVideo {
   owner_name: string;
   role: 'viewer' | 'editor';
@@ -56,8 +46,8 @@ export interface UploadSession {
   file: File;
   title: string;
   description?: string;
-  isPublic: boolean;        // Access setting at upload time
-  publicRole: 'viewer' | 'editor';  // Role for public access
+  isPublic: boolean;
+  publicRole: 'viewer' | 'editor';
   chunks: UploadChunk[];
   status: 'pending' | 'uploading' | 'processing' | 'complete' | 'error';
   progress: number;
@@ -103,17 +93,14 @@ export interface PublicAccessResponse {
   };
 }
 
-/** One segment of a multi-segment marker (strokes with a time range) */
 export interface MarkerSegmentPayload {
   startTime: number;
   endTime: number;
   strokes: DrawingStroke[];
 }
 
-/** drawing_data: legacy array of strokes, or multi-segment marker */
 export type CommentDrawingData = DrawingStroke[] | { segments: MarkerSegmentPayload[] };
 
-/** Comment / marker / shape for watch-together */
 export interface Comment {
   id: string;
   video_id: string;

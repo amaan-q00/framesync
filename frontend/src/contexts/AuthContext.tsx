@@ -8,7 +8,6 @@ import { setToken, clearToken, getToken } from '@/lib/authToken';
 
 const PUBLIC_ROUTES = ['/login', '/register', '/', '/auth'];
 
-/** Watch pages and auth callback are public. */
 function isPublicRoutePath(pathname: string | null): boolean {
   if (!pathname) return false;
   if (PUBLIC_ROUTES.includes(pathname)) return true;
@@ -50,11 +49,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const pathname = usePathname();
   const isPublicRoute = isPublicRoutePath(pathname);
 
-  // Handle auth errors (401s) from API calls
   useEffect(() => {
     const unsubscribe = onAuthError(() => {
       setUser(null);
-      // Only redirect if not already on a public route (e.g. don't redirect from /watch/xyz)
       if (!isPublicRoute) {
         router.push('/login');
       }
@@ -79,7 +76,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(data.data.user);
         } else {
           setUser(null);
-          // Only redirect to login on 401 when not on a public route (e.g. watch page with cookie still valid after refresh)
           if (!isPublicRoute && response.status === 401) {
             router.push('/login');
           }

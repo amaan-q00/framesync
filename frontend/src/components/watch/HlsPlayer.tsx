@@ -23,9 +23,7 @@ export interface HlsPlayerProps {
   onTimeUpdate?: (time: number) => void;
   onPlay?: () => void;
   onPause?: () => void;
-  /** Called when manifest or playback fails fatally (e.g. 404). Parent can show "Processing..." and retry. */
   onFatalError?: () => void;
-  /** Called when manifest has been parsed successfully. Parent can clear "Processing..." state. */
   onManifestParsed?: () => void;
 }
 
@@ -140,7 +138,6 @@ function HlsPlayerInner(
     return undefined;
   }, [manifestUrl]);
 
-  // Apply controlled sync (passenger mode)
   useEffect(() => {
     if (!controlled) return;
     const video = videoRef.current;
@@ -157,7 +154,6 @@ function HlsPlayerInner(
     else video.pause();
   }, [controlled?.syncTime, controlled?.syncPlaying]);
 
-  // Report playback events to parent (for host sync_pulse)
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;

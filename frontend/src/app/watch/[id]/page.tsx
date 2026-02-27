@@ -57,9 +57,7 @@ export default function WatchPage(): React.ReactElement {
   const [strokeColor, setStrokeColor] = useState('#FF0000');
   const [markerMode, setMarkerMode] = useState<MarkerModeState | null>(null);
   const [markerSaving, setMarkerSaving] = useState(false);
-  /** Popup: timestamp captured when Quick marker was clicked; submit uses this time, not submit time. */
   const [quickMarkerPopup, setQuickMarkerPopup] = useState<{ timestamp: number } | null>(null);
-  /** Popup: segments captured when End marker was clicked; submit uses these, not submit time. */
   const [endMarkerPopup, setEndMarkerPopup] = useState<{ segments: MarkerSegment[] } | null>(null);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -115,7 +113,6 @@ export default function WatchPage(): React.ReactElement {
     (isAuthenticated && syncState.hostId !== null && user && Number(user.id) === syncState.hostId) || guestIsHost;
   const [userHasJoinedLive, setUserHasJoinedLive] = useState(false);
   const isPassenger = isLiveMode && userHasJoinedLive && syncState.hasRoomState && !isHost;
-  /** In live session and either host or joined as viewer (so they can draw/see ephemeral, cursors, etc.) */
   const isInLiveSession = isLiveMode && (isHost || userHasJoinedLive);
 
   useEffect(() => {
@@ -143,7 +140,6 @@ export default function WatchPage(): React.ReactElement {
   const isPlayable = Boolean(video?.manifestUrl);
   const canAddComment = Boolean(video && isPlayable);
   const canAddMarkers = (video?.role === 'owner' || video?.role === 'editor') && (!isLiveMode || isHost) && isPlayable;
-  /** Ephemeral drawing: only in live session (broadcast, 1s TTL, never saved). Not available in solo. */
   const canDoEphemeral = isInLiveSession && !video?.isPublicAccess;
   const iHaveLock = Boolean(
     isLiveMode &&
@@ -203,8 +199,6 @@ export default function WatchPage(): React.ReactElement {
     };
   }, [id, token, showError]);
 
-  // Poll getVideo when we have no manifestUrl yet (uploading, queued, or processing with 0 segments)
-  // so we get manifestUrl once the first chunk exists or video is ready
   useEffect(() => {
     if (!id || !video || video.manifestUrl) return;
     const status = video.status;
@@ -225,7 +219,6 @@ export default function WatchPage(): React.ReactElement {
     return () => clearInterval(interval);
   }, [id, token, video?.status, video?.manifestUrl]);
 
-  // When permission changes (access revoked or role changed), push user to dashboard
   const videoRoleRef = useRef<string | null>(null);
   if (video?.role) videoRoleRef.current = video.role;
 
@@ -285,11 +278,9 @@ export default function WatchPage(): React.ReactElement {
       const stored = sessionStorage.getItem(key);
       if (stored) setGuestName(stored);
     } catch {
-      // ignore
     }
   }, [id]);
 
-  // End live session when host leaves the watch page (e.g. back to dashboard)
   useEffect(() => {
     return () => {
       if (socket && id && isHostRef.current && isLiveModeRef.current) {
@@ -304,7 +295,6 @@ export default function WatchPage(): React.ReactElement {
       try {
         sessionStorage.setItem(`framesync:guest:${id}`, name);
       } catch {
-        // ignore
       }
     },
     [id]
@@ -407,7 +397,6 @@ export default function WatchPage(): React.ReactElement {
     [fps]
   );
 
-  /** Capture time when Quick marker is clicked; parent shows popup. Time used on submit is this, not submit time. */
   const handleRequestQuickMarker = useCallback(() => {
     const t = playerRef.current?.getCurrentTime() ?? 0;
     setQuickMarkerPopup({ timestamp: t });
@@ -446,7 +435,6 @@ export default function WatchPage(): React.ReactElement {
     setQuickMarkerPopup(null);
   }, []);
 
-  /** Marker with drawing: one click = pause + start time. User can add segments (Draw / Done drawing), then End marker opens popup. */
   const handleStartMarkerWithDrawing = useCallback(() => {
     const player = playerRef.current;
     const t = player?.getCurrentTime() ?? currentTime;
@@ -462,7 +450,6 @@ export default function WatchPage(): React.ReactElement {
     setMarkerMode(mode);
   }, [currentTime]);
 
-  /** Add another segment: pause at current time, user draws, then Done drawing. */
   const handleStartDraw = useCallback(() => {
     const player = playerRef.current;
     const t = player?.getCurrentTime() ?? currentTime;
@@ -502,7 +489,6 @@ export default function WatchPage(): React.ReactElement {
     setIsPlaying(true);
   }, []);
 
-  /** Capture segments when End marker is clicked; open popup. On submit we use these segments (times from button clicks). */
   const handleRequestEndMarker = useCallback(() => {
     const latest = markerModeRef.current;
     let segments = latest?.segments ?? [];

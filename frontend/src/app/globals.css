@@ -1,13 +1,8 @@
 @import "tailwindcss";
 
-/* ---------------------------------------------------------------------------
-   Purplish dark theme + light accent (default)
-   Light theme toggle-ready via data-theme="light"
-   --------------------------------------------------------------------------- */
 :root {
   --background: #0f0d14;
   --foreground: #f5f3ff;
-  /* Purplish dark surfaces */
   --bg-page: #0c0a12;
   --bg-surface: #15121d;
   --bg-elevated: #1e1a28;
@@ -15,11 +10,9 @@
   --fg-muted: #9d99b0;
   --border: #2d2a3d;
   --border-subtle: #252230;
-  /* Primary: vibrant violet (main accent) */
   --primary: #8b5cf6;
   --primary-hover: #7c3aed;
   --primary-ring: rgba(139, 92, 246, 0.45);
-  /* Light accent for highlights, hover glow, secondary emphasis */
   --accent: #c4b5fd;
   --accent-subtle: rgba(196, 181, 253, 0.15);
   --danger: #f87171;
@@ -88,7 +81,6 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* Accent glow for interactive elements (optional use) */
 .accent-glow {
   box-shadow: 0 0 0 1px var(--border), 0 0 20px -5px var(--accent-subtle);
 }

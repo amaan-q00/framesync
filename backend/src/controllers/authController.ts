@@ -12,10 +12,7 @@ import { User, CookieOptions } from '../types';
 import { AuthRequest, getAuthToken } from '../middleware/auth';
 import { toPresignedAssetUrl } from '../utils/presigned';
 
-// Google: ID token verification (for POST /google with token from frontend)
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
-
-// Google: OAuth2 code flow (backend-driven; frontend just redirects here)
 const googleRedirectUri = `${env.API_URL.replace(/\/$/, '')}/api/auth/google/callback`;
 const googleOAuth2Client = new OAuth2Client(
   env.GOOGLE_CLIENT_ID,
@@ -71,7 +68,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-// --- GOOGLE AUTH (shared user lookup) ---
 async function findOrCreateGoogleUser(payload: { email: string; name?: string; picture?: string; sub: string }): Promise<User> {
   const { email, name, picture, sub: googleId } = payload;
   const userRes = await pool.query<User>('SELECT * FROM users WHERE email = $1', [email]);
@@ -98,7 +94,6 @@ async function findOrCreateGoogleUser(payload: { email: string; name?: string; p
   return user;
 }
 
-/** POST /api/auth/google — frontend sends ID token (e.g. from Google Identity Services). Kept for optional client-side flow. */
 export const googleLogin = async (req: Request, res: Response, next: NextFunction) => {
   const { token } = req.body as { token?: string };
   if (!token) return next(new AppError('Token is required', 400));
@@ -140,7 +135,6 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-/** GET /api/auth/google — start backend-driven OAuth. Redirects to Google; user returns to /api/auth/google/callback. */
 export const googleRedirect = async (req: Request, res: Response, next: NextFunction) => {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
     return next(new AppError('Google OAuth is not configured', 503));
@@ -158,7 +152,6 @@ export const googleRedirect = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-/** GET /api/auth/google/callback — Google redirects here with ?code=. Exchange code, create session, redirect to frontend. */
 export const googleCallback = async (req: Request, res: Response, next: NextFunction) => {
   const { code, error: oauthError } = req.query as { code?: string; error?: string };
   if (oauthError) {
@@ -207,21 +200,14 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
     }
 
-    // 1. Decode to get expiration time
     const decoded = jwt.decode(token) as any;
-    
-    // If token is already invalid/malformed, just return success
     if (!decoded || !decoded.exp) {
        return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
     }
 
-    // 2. Calculate remaining time in seconds
     const now = Math.floor(Date.now() / 1000);
     const ttl = decoded.exp - now;
-
-    // 3. Add to Redis Blacklist
     if (ttl > 0) {
-      // Key: "blacklist:eyJ...", Value: "true", Expiry: remaining seconds
       await redis.setex(`blacklist:${token}`, ttl, 'true');
     }
 
@@ -231,7 +217,6 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
-// Session validation endpoint
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userResult = await pool.query(
@@ -254,7 +239,6 @@ export const getMe = async (req: AuthRequest, res: Response, next: NextFunction)
   }
 };
 
-// DELETE /api/auth/me — Delete account (user must enter their email to confirm)
 export const deleteMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const { confirmEmail } = req.body as { confirmEmail?: string };
 

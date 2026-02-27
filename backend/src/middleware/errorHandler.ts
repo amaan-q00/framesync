@@ -1,14 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodError, ZodIssue } from 'zod'; // Import ZodIssue type
+import { ZodError, ZodIssue } from 'zod';
 import { AppError } from '../utils/appError';
 
 export const globalErrorHandler = (
-  err: Error, 
-  req: Request, 
-  res: Response, 
+  err: Error,
+  req: Request,
+  res: Response,
   next: NextFunction
 ) => {
-  // Handle Zod Validation Errors
   if (err instanceof ZodError) {
     return res.status(400).json({
       status: 'fail',
@@ -28,7 +27,6 @@ export const globalErrorHandler = (
     });
   }
 
-  // Handle Unknown/System Errors
   console.error('UNEXPECTED ERROR:', err);
   return res.status(500).json({
     status: 'error',

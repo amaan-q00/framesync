@@ -38,14 +38,12 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       error('Invalid file type. Only JPEG, PNG, and WebP are allowed');
       return;
     }
 
-    // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       error('File too large. Maximum size is 5MB');
@@ -58,7 +56,6 @@ export default function SettingsPage() {
       const newAvatarUrl = response.data.avatar_url;
       setAvatarUrl(newAvatarUrl);
       
-      // Update user in context with new avatar
       if (user) {
         updateUser({ ...user, avatar_url: newAvatarUrl });
       }
@@ -83,7 +80,6 @@ export default function SettingsPage() {
     try {
       const response = await profileApi.updateMe({ name: name.trim() });
       
-      // Update user in context
       if (user) {
         updateUser({ ...user, name: response.data.user.name });
       }

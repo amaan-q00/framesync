@@ -20,7 +20,6 @@ interface DashboardSyncContextValue {
   subscribeRefetchShared: (fn: RefetchFn) => () => void;
   notifyUploadComplete: () => void;
   socketConnected: boolean;
-  /** Authenticated users: use this socket to join video rooms (e.g. watch page comments). */
   socket: Socket | null;
 }
 

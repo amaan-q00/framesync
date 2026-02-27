@@ -6,8 +6,8 @@ const router = Router();
 
 router.post('/register', register);
 router.post('/login', login);
-router.post('/google', googleLogin);       // optional: frontend sends ID token
-router.get('/google', googleRedirect);    // backend-driven: frontend just links here
+router.post('/google', googleLogin);
+router.get('/google', googleRedirect);
 router.get('/google/callback', googleCallback);
 router.post('/logout', logout);
 router.get('/me', protect, getMe);
