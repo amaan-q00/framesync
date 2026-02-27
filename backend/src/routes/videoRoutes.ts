@@ -3,6 +3,7 @@ import {
   initializeMultipart, 
   signPart, 
   completeMultipart,
+  cancelUpload,
   getMyWorks,
   getSharedWithMe,
   getVideo,
@@ -26,6 +27,7 @@ const router = Router();
 router.post('/initialize', protect, initializeMultipart);
 router.post('/sign-part', protect, signPart);
 router.post('/complete', protect, completeMultipart);
+router.post('/:id/cancel-upload', protect, cancelUpload);
 
 router.get('/my-works', protect, getMyWorks);
 router.get('/shared-with-me', protect, getSharedWithMe);

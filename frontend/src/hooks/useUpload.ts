@@ -70,21 +70,11 @@ export function useUpload(options?: UseUploadOptions) {
       signal: AbortSignal
     ): Promise<{ etag: string; partNumber: number }> => {
       const blob = file.slice(chunk.start, chunk.end);
-      console.log('[uploadPart] start', { videoId, partNumber: chunk.partNumber, size: blob.size });
-      try {
-        const res = await videoApi.uploadPart(key, uploadId, chunk.partNumber, blob, signal);
-        const etag = res.data?.etag;
-        if (!etag) {
-          console.error('[uploadPart] no ETag in response', { videoId, partNumber: chunk.partNumber });
-          throw new Error('No ETag received');
-        }
-        console.log('[uploadPart] ok', { videoId, partNumber: chunk.partNumber, etag: etag.slice(0, 20) });
-        return { etag, partNumber: chunk.partNumber };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[uploadPart] failed', { videoId, partNumber: chunk.partNumber, error: msg });
-        throw err;
-      }
+      const { data: signData } = await videoApi.signPart({ key, uploadId, partNumber: chunk.partNumber });
+      const presignedUrl = signData?.url;
+      if (!presignedUrl) throw new Error('No presigned URL');
+      const { etag } = await videoApi.uploadPartToS3(presignedUrl, blob, signal);
+      return { etag, partNumber: chunk.partNumber };
     },
     []
   );
@@ -197,9 +187,11 @@ export function useUpload(options?: UseUploadOptions) {
             status: 'error',
             error: 'Upload cancelled',
           });
+          videoApi.cancelUpload(upload.videoId).catch(() => {});
         } else {
           const message = err instanceof Error ? err.message : 'Upload failed';
           updateUpload(upload.videoId, { status: 'error', error: message });
+          videoApi.cancelUpload(upload.videoId).catch(() => {});
         }
       } finally {
         abortControllersRef.current.delete(upload.videoId);
@@ -254,6 +246,7 @@ export function useUpload(options?: UseUploadOptions) {
       abortControllersRef.current.delete(videoId);
     }
     updateUpload(videoId, { status: 'error', error: 'Upload cancelled' });
+    videoApi.cancelUpload(videoId).catch(() => {});
   }, [updateUpload]);
 
   const removeUpload = useCallback((videoId: string) => {

@@ -164,28 +164,30 @@ export const videoApi = {
     });
   },
 
-  uploadPart: async (
-    key: string,
-    uploadId: string,
-    partNumber: number,
+  /** PUT chunk directly to S3 presigned URL; returns ETag from response header. */
+  uploadPartToS3: async (
+    presignedUrl: string,
     chunk: Blob,
     signal?: AbortSignal
-  ): Promise<{ status: string; data: { etag: string } }> => {
-    const params = new URLSearchParams({ key, uploadId, partNumber: String(partNumber) });
-    const url = `${API_BASE_URL}/api/videos/upload-part?${params}`;
-    const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' };
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const response = await fetch(url, {
-      method: 'POST',
+  ): Promise<{ etag: string }> => {
+    const response = await fetch(presignedUrl, {
+      method: 'PUT',
       body: chunk,
-      credentials: 'include',
       signal,
-      headers,
+      headers: { 'Content-Type': 'application/octet-stream' },
     });
-    const data = await response.json();
-    if (!response.ok) throw new ApiError(data.message || 'Upload part failed', response.status);
-    return data;
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiError(text || `Upload part failed: ${response.status}`, response.status);
+    }
+    const etagHeader = response.headers.get('ETag');
+    const etag = etagHeader ? etagHeader.replace(/^"|"$/g, '') : '';
+    if (!etag) throw new ApiError('No ETag from storage', 502);
+    return { etag };
+  },
+
+  cancelUpload: async (videoId: string): Promise<{ status: string; message: string }> => {
+    return apiRequest(`/videos/${videoId}/cancel-upload`, { method: 'POST' });
   },
 
   completeMultipart: async (data: {

@@ -475,37 +475,18 @@ export const signPart = async (req: AuthRequest, res: Response, next: NextFuncti
   }
 };
 
-export const uploadPart = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const key = req.query.key as string;
-  const uploadId = req.query.uploadId as string;
-  const partNumber = req.query.partNumber as string;
-
+export const cancelUpload = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const { id } = req.params as { id: string };
+  const userId = req.user?.userId;
   try {
-    if (!key || !uploadId || !partNumber) {
-      return next(new AppError('Missing key, uploadId or partNumber', 400));
+    const result = await pool.query(
+      "UPDATE videos SET status = 'failed' WHERE id = $1 AND user_id = $2 AND status = 'uploading' RETURNING id",
+      [id, userId]
+    );
+    if (result.rowCount === 0) {
+      return next(new AppError('Video not found or not in uploading state', 404));
     }
-    const partNum = parseInt(partNumber, 10);
-    if (Number.isNaN(partNum) || partNum < 1) {
-      return next(new AppError('Invalid partNumber', 400));
-    }
-
-    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-    if (!contentLength) return next(new AppError('Missing Content-Length', 400));
-
-    const command = new UploadPartCommand({
-      Bucket: BUCKET_NAME,
-      Key: key,
-      UploadId: uploadId,
-      PartNumber: partNum,
-      Body: req,
-      ContentLength: contentLength,
-    });
-
-    const s3result = await s3.send(command);
-    const etag = s3result.ETag ? s3result.ETag.replace(/"/g, '') : '';
-    if (!etag) return next(new AppError('No ETag from storage', 502));
-
-    res.status(200).json({ status: 'success', data: { etag } });
+    res.status(200).json({ status: 'success', message: 'Upload cancelled' });
   } catch (error) {
     next(error);
   }

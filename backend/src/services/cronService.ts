@@ -18,9 +18,33 @@ export const initCronJobs = () => {
     console.log('Running Hourly Cleanup Job...');
     await cleanupExpiredVideos();
   });
+
+  cron.schedule('*/5 * * * *', async () => {
+    await markStaleUploadsFailed();
+  });
   
   console.log(`- View Sync: Active (1 min interval)`);
   console.log(`- Cleanup: Active (Older than ${RETENTION_HOURS} hours)`);
+  console.log(`- Stale uploads: Mark as failed every 5 min`);
+};
+
+const STALE_UPLOAD_MINUTES = 30;
+
+const markStaleUploadsFailed = async () => {
+  try {
+    const result = await pool.query(
+      `UPDATE videos SET status = 'failed'
+       WHERE status = 'uploading'
+         AND created_at < NOW() - INTERVAL '1 minute' * $1
+       RETURNING id`,
+      [STALE_UPLOAD_MINUTES]
+    );
+    if (result.rowCount && result.rowCount > 0) {
+      console.log(`Marked ${result.rowCount} stale upload(s) as failed`);
+    }
+  } catch (err) {
+    console.error('Stale upload cleanup failed:', err);
+  }
 };
 
 const syncViews = async () => {

@@ -10,8 +10,6 @@ import createTables from './models/schema';
 import authRoutes from './routes/authRoutes';
 import videoRoutes from './routes/videoRoutes';
 import profileRoutes from './routes/profileRoutes';
-import { protect } from './middleware/auth';
-import { uploadPart } from './controllers/videoController';
 import { globalErrorHandler } from './middleware/errorHandler';
 import { initWorker } from './services/worker';
 import { initCronJobs } from './services/cronService';
@@ -27,10 +25,6 @@ app.use(cors({
 }));
 
 app.use(cookieParser());
-
-// upload-part: keep body as stream (before json parser)
-app.post('/api/videos/upload-part', protect, uploadPart);
-
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);

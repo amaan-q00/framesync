@@ -35,11 +35,14 @@ function statusColor(status: UploadSession['status']): string {
 }
 
 function statusLabel(upload: UploadSession): string {
+  const completed = upload.chunks.filter((c) => c.status === 'complete').length;
+  const total = upload.chunks.length;
+  const partLabel = total > 0 ? ` · Part ${completed}/${total}` : '';
   switch (upload.status) {
     case 'pending':
       return 'Waiting…';
     case 'uploading':
-      return `Uploading ${upload.progress}%`;
+      return `Uploading ${upload.progress}%${partLabel}`;
     case 'processing':
       return 'Processing…';
     case 'complete':
