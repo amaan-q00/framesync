@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getToken } from '@/lib/authToken';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -12,7 +13,7 @@ export interface UseSocketResult {
 
 /**
  * Connects to the backend Socket.IO server when the user is authenticated.
- * Uses credentials (cookie) for auth; no token in JS.
+ * Uses cookie or Bearer token (for cross-origin when cookies are blocked).
  */
 export function useSocket(isAuthenticated: boolean): UseSocketResult {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -31,8 +32,10 @@ export function useSocket(isAuthenticated: boolean): UseSocketResult {
       return;
     }
 
+    const token = getToken();
     const s = io(API_BASE_URL, {
       withCredentials: true,
+      auth: token ? { token } : undefined,
       transports: ['websocket', 'polling'],
     });
 

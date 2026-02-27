@@ -8,8 +8,8 @@ import { AuthService } from '../services/authService';
 import { RegisterSchema, LoginSchema } from '../schemas/auth.schema';
 import { AppError } from '../utils/appError';
 import { isValidEmailFormat } from '../utils/emailValidation';
-import { User, SafeUser, CookieOptions } from '../types';
-import { AuthRequest } from '../middleware/auth';
+import { User, CookieOptions } from '../types';
+import { AuthRequest, getAuthToken } from '../middleware/auth';
 import { toPresignedAssetUrl } from '../utils/presigned';
 
 // Google: ID token verification (for POST /google with token from frontend)
@@ -23,16 +23,20 @@ const googleOAuth2Client = new OAuth2Client(
   googleRedirectUri
 );
 
-// Helper function to set auth cookie
-const setAuthCookie = (res: Response, token: string) => {
-  const cookieOptions: CookieOptions = {
-    maxAge: parseInt(env.COOKIE_MAX_AGE),
-    httpOnly: env.COOKIE_HTTPONLY === 'true',
-    secure: env.COOKIE_SECURE === 'true',
-    sameSite: env.COOKIE_SAMESITE as 'strict' | 'lax' | 'none',
-  };
+const cookieOptions = (): CookieOptions => ({
+  path: '/',
+  maxAge: parseInt(env.COOKIE_MAX_AGE),
+  httpOnly: env.COOKIE_HTTPONLY === 'true',
+  secure: env.COOKIE_SECURE === 'true',
+  sameSite: env.COOKIE_SAMESITE as 'strict' | 'lax' | 'none',
+});
 
-  res.cookie('auth_token', token, cookieOptions);
+const setAuthCookie = (res: Response, token: string) => {
+  res.cookie('auth_token', token, cookieOptions());
+};
+
+const clearAuthCookie = (res: Response) => {
+  res.clearCookie('auth_token', { path: '/', secure: env.COOKIE_SECURE === 'true', sameSite: env.COOKIE_SAMESITE as 'strict' | 'lax' | 'none' });
 };
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
@@ -40,13 +44,10 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     const validatedData = RegisterSchema.parse(req.body);
     const result = await AuthService.register(validatedData);
     
-    // Set auth cookie
     setAuthCookie(res, result.token);
-    
-    // Return user data without token
-    res.status(201).json({ 
-      status: 'success', 
-      data: { user: result.user }
+    res.status(201).json({
+      status: 'success',
+      data: { user: result.user, token: result.token },
     });
   } catch (error) {
     next(error);
@@ -63,7 +64,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const avatar_url = await toPresignedAssetUrl(result.user.avatar_url, 604800);
     res.status(200).json({
       status: 'success',
-      data: { user: { ...result.user, avatar_url } }
+      data: { user: { ...result.user, avatar_url }, token: result.token },
     });
   } catch (error) {
     next(error);
@@ -130,6 +131,7 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
           avatar_url,
           created_at: user.created_at,
         },
+        token: jwtToken,
       },
     });
   } catch (error) {
@@ -188,7 +190,7 @@ export const googleCallback = async (req: Request, res: Response, next: NextFunc
     setAuthCookie(res, jwtToken);
 
     const frontend = env.APP_URL.replace(/\/$/, '');
-    res.redirect(302, `${frontend}/dashboard`);
+    res.redirect(302, `${frontend}/auth/callback?token=${encodeURIComponent(jwtToken)}`);
   } catch (err) {
     console.error('Google callback error:', err);
     next(new AppError('Google sign-in failed', 401));
@@ -196,11 +198,10 @@ export const googleCallback = async (req: Request, res: Response, next: NextFunc
 };
 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
-  const token = req.cookies?.auth_token;
+  const token = getAuthToken(req);
 
   try {
-    // Clear the auth cookie
-    res.clearCookie('auth_token');
+    clearAuthCookie(res);
 
     if (!token) {
       return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
@@ -255,7 +256,6 @@ export const getMe = async (req: AuthRequest, res: Response, next: NextFunction)
 
 // DELETE /api/auth/me — Delete account (user must enter their email to confirm)
 export const deleteMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.cookies?.auth_token;
   const { confirmEmail } = req.body as { confirmEmail?: string };
 
   try {
@@ -283,8 +283,9 @@ export const deleteMe = async (req: AuthRequest, res: Response, next: NextFuncti
 
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
 
-    res.clearCookie('auth_token');
+    clearAuthCookie(res);
 
+    const token = getAuthToken(req);
     if (token) {
       const decoded = jwt.decode(token) as { exp?: number } | null;
       if (decoded?.exp) {

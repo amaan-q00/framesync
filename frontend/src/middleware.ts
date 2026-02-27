@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Public routes that don't require authentication (path prefix or exact match)
-const PUBLIC_ROUTES = ['/login', '/register', '/api/auth', '/watch'];
+const PUBLIC_ROUTES = ['/login', '/register', '/api/auth', '/watch', '/auth/callback'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
     pathname === '/' ||
     PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
 
-  const authToken = request.cookies.get('auth_token')?.value;
+  const authToken = request.cookies.get('auth_token')?.value ?? request.cookies.get('fs_token')?.value;
 
   if (!authToken && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url);

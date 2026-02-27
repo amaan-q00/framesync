@@ -4,14 +4,16 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { useRouter, usePathname } from 'next/navigation';
 import { User, LoginCredentials, RegisterCredentials } from '@/types/auth';
 import { authApi, onAuthError } from '@/lib/api';
+import { setToken, clearToken, getToken } from '@/lib/authToken';
 
-const PUBLIC_ROUTES = ['/login', '/register', '/'];
+const PUBLIC_ROUTES = ['/login', '/register', '/', '/auth'];
 
-/** Watch pages are public (shared links with ?token=); no auth check or redirect. */
+/** Watch pages and auth callback are public. */
 function isPublicRoutePath(pathname: string | null): boolean {
   if (!pathname) return false;
   if (PUBLIC_ROUTES.includes(pathname)) return true;
   if (pathname.startsWith('/watch/')) return true;
+  if (pathname.startsWith('/auth/')) return true;
   return false;
 }
 
@@ -62,10 +64,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const token = getToken();
     const validateAuth = async () => {
       try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         const response = await fetch(`${apiBase}/api/auth/me`, {
           credentials: 'include',
+          headers,
         });
 
         if (response.ok) {
@@ -91,7 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginCredentials) => {
     try {
       const response = await authApi.login(credentials);
-      // Token will be set as HttpOnly cookie by backend
+      if (response.data.token) setToken(response.data.token);
       setUser(response.data.user);
     } catch (error) {
       throw error;
@@ -101,7 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (credentials: RegisterCredentials) => {
     try {
       const response = await authApi.register(credentials);
-      // Token will be set as HttpOnly cookie by backend
+      if (response.data.token) setToken(response.data.token);
       setUser(response.data.user);
     } catch (error) {
       throw error;
@@ -111,7 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const googleLogin = async (token: string) => {
     try {
       const response = await authApi.googleLogin(token);
-      // Token will be set as HttpOnly cookie by backend
+      if (response.data.token) setToken(response.data.token);
       setUser(response.data.user);
     } catch (error) {
       throw error;
@@ -122,9 +128,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await authApi.logout();
     } catch (err: unknown) {
-      // Continue with logout even if API call fails
       console.error('Logout API call failed:', err);
     } finally {
+      clearToken();
       setUser(null);
     }
   };

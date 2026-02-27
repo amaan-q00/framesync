@@ -1,4 +1,5 @@
 import { LoginCredentials, RegisterCredentials, AuthResponse, GoogleAuthResponse, User } from '@/types/auth';
+import { getToken } from './authToken';
 import {
   InitializeUploadResponse,
   SignPartResponse,
@@ -44,6 +45,11 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const defaultHeaders: Record<string, string> = isFormData 
     ? {} 
     : { 'Content-Type': 'application/json' };
+
+  const token = getToken();
+  if (token) {
+    defaultHeaders['Authorization'] = `Bearer ${token}`;
+  }
 
   const config: RequestInit = {
     ...options,

@@ -21,6 +21,7 @@ export interface AuthResponse {
   status: string;
   data: {
     user: User;
+    token?: string;
   };
 }
 
@@ -28,5 +29,6 @@ export interface GoogleAuthResponse {
   status: string;
   data: {
     user: User;
+    token?: string;
   };
 }
